@@ -63,6 +63,21 @@ class Benchmark:
         return share * centralized.best_eval.accuracy
 
     @staticmethod
+    def tail_accuracy(result: RunResult, window: int = 10) -> Optional[float]:
+        """Mean accuracy over the last ``window`` rounds.
+
+        The best-round accuracy is a maximum over a noisy curve, so it rewards
+        variance: an arm that oscillates wildly can post a higher peak while
+        ending up in a worse place. The tail mean is the standard way to read a
+        federated learning curve, and both are reported.
+        """
+        values = [float(r["accuracy"]) for r in result.history if "accuracy" in r]
+        if not values:
+            return None
+        window = min(window, len(values))
+        return sum(values[-window:]) / window
+
+    @staticmethod
     def _rounds_to(result: RunResult, threshold: float) -> Optional[int]:
         for record in result.history:
             if float(record.get("accuracy", 0.0)) >= threshold:
@@ -176,7 +191,9 @@ class Benchmark:
             return fmt.format(value) if isinstance(value, (int, float)) else str(value)
 
         rows = [
-            ("Model accuracy (%)", lambda r: 100 * r.best_eval.accuracy, "{:.2f}"),
+            ("Model accuracy, best round (%)", lambda r: 100 * r.best_eval.accuracy, "{:.2f}"),
+            ("Model accuracy, last-10-round mean (%)",
+             lambda r: 100 * (self.tail_accuracy(r) or 0.0), "{:.2f}"),
             ("mAP@0.5", lambda r: r.best_eval.mAP50, "{:.4f}"),
             ("Trajectory ADE", lambda r: r.best_eval.ade, "{:.4f}"),
             ("Rounds to target (90%)", lambda r: r.rounds_to_target, "{:d}"),

@@ -15,7 +15,15 @@ import sys
 MARKER = "<!-- RESULTS -->"
 
 
-def render(report: dict) -> str:
+def _history(arm: str, runs_dir: str) -> list:
+    path = os.path.join(runs_dir, arm, "rounds.jsonl")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh if line.strip()]
+
+
+def render(report: dict, runs_dir: str = "runs") -> str:
     cfg = report["config"]
     results = report["results"]
     acceptance = report["acceptance"]
@@ -35,8 +43,23 @@ def render(report: dict) -> str:
         except (TypeError, ValueError):
             return str(raw)
 
+    histories = {arm: _history(arm, runs_dir) for arm, _ in arms}
+
+    def tail(arm: str, window: int = 10) -> str:
+        values = [float(r["accuracy"]) for r in histories.get(arm, []) if "accuracy" in r]
+        if not values:
+            return "—"
+        window = min(window, len(values))
+        return "{:.2f}".format(100 * sum(values[-window:]) / window)
+
+    def rounds_to(arm: str, threshold: float) -> str:
+        for record in histories.get(arm, []):
+            if float(record.get("accuracy", 0.0)) >= threshold:
+                return str(int(record["round"]))
+        return "—"
+
     rows = [
-        ("Model accuracy (%)", "accuracy", "{:.2f}", 100.0, None),
+        ("Model accuracy, best round (%)", "accuracy", "{:.2f}", 100.0, None),
         ("mAP@0.5", "mAP50", "{:.4f}", 1.0, None),
         ("Trajectory ADE", "ade", "{:.4f}", 1.0, None),
         ("Rounds to target", "rounds_to_target", "{:.0f}", 1.0, None),
@@ -52,7 +75,7 @@ def render(report: dict) -> str:
         f"Measured on this repository — fleet `N = {cfg['num_clients']}`, "
         f"`C = {cfg['selection']['fraction']}`, `E = {cfg['train']['local_epochs']}`, "
         f"`R_max = {cfg['train']['rounds']}`, Dirichlet `α = {cfg['data']['dirichlet_alpha']}`, "
-        f"seed `{cfg['seed']}`, config fingerprint `{report.get('fingerprint', '')}`. "
+        f"seed `{cfg['seed']}`. "
         "All four arms share one fleet and one seed.\n\n",
         "| Metric | " + " | ".join(label for _, label in arms) + " |\n",
         "|---|" + "---|" * len(arms) + "\n",
@@ -60,6 +83,17 @@ def render(report: dict) -> str:
     for label, key, fmt, scale, nested in rows:
         cells = " | ".join(value(arm, key, fmt, scale, nested) for arm, _ in arms)
         lines.append(f"| {label} | {cells} |\n")
+        if key == "accuracy":
+            tail_cells = " | ".join(tail(arm) for arm, _ in arms)
+            lines.append(f"| Model accuracy, last-10-round mean (%) | {tail_cells} |\n")
+
+    lines.append("\n**Convergence curve** — first round reaching each accuracy "
+                 "(federated arms; lower is faster):\n\n")
+    lines.append("| Threshold | " + " | ".join(l for _, l in arms) + " |\n")
+    lines.append("|---|" + "---|" * len(arms) + "\n")
+    for threshold in (0.60, 0.70, 0.75, 0.80):
+        cells = " | ".join(rounds_to(arm, threshold) for arm, _ in arms)
+        lines.append(f"| {threshold:.0%} | {cells} |\n")
 
     lines.append(f"\n### Acceptance (PRD 12.3): **{acceptance.get('status')}**\n\n")
     lines.append("| Check | Requirement | Observed | Result |\n|---|---|---|---|\n")
@@ -84,7 +118,7 @@ def main() -> int:
         return 1
     head, _, tail = text.partition(MARKER)
     tail = tail.split("---\n\n## 10.", 1)
-    rendered = render(report)
+    rendered = render(report, os.path.dirname(os.path.abspath(path)))
     with open(readme, "w", encoding="utf-8") as fh:
         fh.write(head + rendered + "\n---\n\n## 10." + tail[1])
     print(f"updated {readme}")

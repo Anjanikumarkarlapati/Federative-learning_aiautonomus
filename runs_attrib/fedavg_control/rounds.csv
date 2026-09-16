@@ -1,0 +1,3 @@
+round,accuracy,mAP50,ade,fde,loss,clients_selected,clients_reported,mb_round,mb_cumulative,delta_norm,client_acc_mean,client_acc_std,client_acc_min,epsilon_spent,lr,round_seconds
+1,0.16111,3e-05,0.29809,0.50792,2.45056,15,12,74.0532,74.0532,0.627973,,,,0.0,0.01,33.286
+2,0.19278,0.00087,0.30129,0.52338,1.96127,15,12,74.57265,148.6258,0.794411,,,,0.0,0.009971,35.155
