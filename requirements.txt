@@ -1,0 +1,17 @@
+# Core (PRD 14). Python 3.11.
+torch>=2.1
+numpy>=1.24
+
+# Config files. The framework falls back to a built-in mini-parser if absent.
+PyYAML>=6.0
+
+# Tests
+pytest>=7.4
+
+# Optional experiment tracking (PRD 14) - attach via MetricsLogger.add_sink
+# mlflow>=2.9
+# wandb>=0.16
+
+# Optional DP-SGD reference implementation (PRD 14); this repo implements its
+# own clipping + RDP accounting so Opacus is not required.
+# opacus>=1.4

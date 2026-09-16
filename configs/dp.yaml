@@ -1,0 +1,80 @@
+# Reference configuration - defaults are the hyperparameters of PRD section 10.
+name: proposed_fl_dp
+num_clients: 50            # N   simulated fleet size
+seed: 1337
+device: cpu
+out_dir: runs
+
+data:
+  num_classes: 6
+  image_size: 32
+  traj_horizon: 6
+  samples_per_client: 220
+  quantity_skew: 0.45      # log-normal sigma on n_k
+  dirichlet_alpha: 0.4     # label skew; smaller -> more skewed
+  feature_skew: true       # region / weather / time-of-day
+  train_share: 0.70
+  val_share: 0.15
+  test_share: 0.15
+  global_test_size: 1800
+  augment: true
+
+model:
+  width: 1.0
+  stem_channels: 24
+  embed_dim: 192
+  dropout: 0.05
+  lambda_box: 1.0
+  lambda_traj: 0.5
+  max_parameters: 6000000
+
+train:
+  rounds: 60               # R_max
+  local_epochs: 5          # E
+  adaptive_epochs: true    # FR-10
+  min_epochs: 1
+  max_epochs: 8
+  lr: 0.01                 # eta
+  cosine_decay: true
+  momentum: 0.9            # beta
+  weight_decay: 0.0005
+  batch_size: 32           # B
+  fedprox_mu: 0.0          # mu  (raise when local drift is high)
+  tolerance: 0.001         # epsilon, ||w^{t+1} - w^t||
+  target_accuracy: 0.90
+  grad_clip: 5.0
+
+selection:
+  fraction: 0.3            # C
+  uptime_threshold: 0.55
+  trajectory_aware: true
+  fairness_k: 12
+  min_clients: 2
+  round_timeout_s: 45.0
+
+aggregation:
+  quality_aware: true
+  server_momentum: 0.9
+  byzantine_robust: false
+  trim_fraction: 0.1
+  q_min: 0.05
+  q_max: 1.0
+
+dp:
+  enabled: true
+  clip_norm: 1.0
+  epsilon: 8.0
+  delta: 0.00001
+  secure_aggregation: true
+
+comm:
+  fp16: true
+  gzip_level: 6
+  send_deltas: true
+  broadcast_delta: true
+  multicast: true
+  topk_ratio: 0.25
+  error_feedback: true
+  min_topk_ratio: 0.02
+  adaptive_sparsity: true
+  mb_budget_per_round: 9.0
