@@ -10,6 +10,14 @@ acceptance criteria of PRD 12.3:
   the ``comm.mb_budget_per_round`` non-functional budget;
 * Non-IID robustness no worse than standard FedAvg (lower cross-client accuracy
   dispersion).
+
+The PRD's 90% bar is an *absolute* number calibrated to its own data scale. When
+the centralized upper bound on the data actually in use sits below that bar, no
+federated arm can clear it and the check fails for a reason that has nothing to
+do with the algorithm. The report therefore also carries a **scale-free**
+convergence metric - rounds to reach 95% of the centralized ceiling - so the
+proposed-vs-FedAvg comparison remains meaningful at any data scale. The absolute
+check is still reported, and still fails when it fails.
 """
 from __future__ import annotations
 
@@ -47,6 +55,20 @@ class Benchmark:
         return self.results
 
     # ------------------------------------------------------------------ report
+    def relative_target(self, share: float = 0.95) -> Optional[float]:
+        """95% of the centralized ceiling - an attainable, scale-free bar."""
+        centralized = self.results.get("centralized")
+        if centralized is None:
+            return None
+        return share * centralized.best_eval.accuracy
+
+    @staticmethod
+    def _rounds_to(result: RunResult, threshold: float) -> Optional[int]:
+        for record in result.history:
+            if float(record.get("accuracy", 0.0)) >= threshold:
+                return int(record["round"])
+        return None
+
     def acceptance(self) -> Dict[str, Any]:
         proposed = self.results.get("proposed_fl")
         fedavg = self.results.get("std_fedavg")
@@ -96,6 +118,35 @@ class Benchmark:
                 "proposed_std": p_std, "fedavg_std": f_std,
                 "pass": bool(p_std <= f_std + 1e-9),
             }
+        # Scale-free convergence comparison (see the module docstring).
+        relative = self.relative_target()
+        if relative is not None and fedavg is not None:
+            p_rel = self._rounds_to(proposed, relative)
+            f_rel = self._rounds_to(fedavg, relative)
+            if p_rel and f_rel:
+                rel_reduction = round(1.0 - p_rel / f_rel, 4)
+            elif p_rel and not f_rel:
+                rel_reduction = 1.0
+            elif f_rel and not p_rel:
+                rel_reduction = -1.0
+            else:
+                rel_reduction = None
+            checks["convergence_speedup_relative"] = {
+                "requirement": "rounds to 95% of the centralized ceiling, cut by >= 25%",
+                "threshold_accuracy": round(relative, 4),
+                "proposed_rounds": p_rel, "fedavg_rounds": f_rel,
+                "reduction": rel_reduction,
+                "pass": bool(rel_reduction is not None and rel_reduction >= 0.25),
+            }
+            checks["accuracy_vs_ceiling"] = {
+                "requirement": "proposed accuracy >= 95% of the centralized ceiling",
+                "centralized": round(self.results["centralized"].best_eval.accuracy, 4),
+                "proposed": round(proposed.best_eval.accuracy, 4),
+                "ratio": round(proposed.best_eval.accuracy /
+                               max(self.results["centralized"].best_eval.accuracy, 1e-9), 4),
+                "pass": bool(proposed.best_eval.accuracy >= relative),
+            }
+
         checks["privacy"] = {
             "requirement": "no raw sensor data egress in any federated arm",
             "observed": all(not r.privacy.get("raw_data_egress", False)
@@ -128,7 +179,9 @@ class Benchmark:
             ("Model accuracy (%)", lambda r: 100 * r.best_eval.accuracy, "{:.2f}"),
             ("mAP@0.5", lambda r: r.best_eval.mAP50, "{:.4f}"),
             ("Trajectory ADE", lambda r: r.best_eval.ade, "{:.4f}"),
-            ("Rounds to target", lambda r: r.rounds_to_target, "{:d}"),
+            ("Rounds to target (90%)", lambda r: r.rounds_to_target, "{:d}"),
+            ("Rounds to 95% of ceiling",
+             lambda r: self._rounds_to(r, self.relative_target() or 1.1), "{:d}"),
             ("Rounds run", lambda r: r.rounds_run, "{:d}"),
             ("Comm. cost (MB/round)", lambda r: r.mb_per_round, "{:.3f}"),
             ("Total comm. (MB)", lambda r: r.total_mb, "{:.1f}"),
@@ -171,6 +224,52 @@ class Benchmark:
         return report
 
 
+def load_results(cfg: FLConfig, out_dir: Optional[str] = None) -> Benchmark:
+    """Rebuild a Benchmark from finished runs on disk, without retraining.
+
+    Lets the report be regenerated (or extended with new derived metrics) from
+    ``runs/<arm>/summary.json`` + ``rounds.jsonl`` after a long experiment.
+    """
+    import json
+    import os
+
+    from ..metrics.evaluation import EvalResult
+
+    out_dir = out_dir or cfg.out_dir
+    benchmark = Benchmark(cfg)
+    for arm in ARMS:
+        summary_path = os.path.join(out_dir, arm, "summary.json")
+        rounds_path = os.path.join(out_dir, arm, "rounds.jsonl")
+        if not os.path.exists(summary_path):
+            continue
+        with open(summary_path, encoding="utf-8") as fh:
+            summary = json.load(fh)
+        history = []
+        if os.path.exists(rounds_path):
+            with open(rounds_path, encoding="utf-8") as fh:
+                history = [json.loads(line) for line in fh if line.strip()]
+        evaluation = EvalResult(
+            accuracy=float(summary.get("accuracy", 0.0)),
+            mAP50=float(summary.get("mAP50", 0.0)),
+            ade=float(summary.get("ade", 0.0)),
+            fde=float(summary.get("fde", 0.0)),
+            samples=1,
+        )
+        benchmark.results[arm] = RunResult(
+            name=arm, config=cfg.to_dict(), best_state={},
+            final_eval=evaluation, best_eval=evaluation,
+            rounds_run=int(summary.get("rounds_run", 0)),
+            rounds_to_target=summary.get("rounds_to_target"),
+            mb_per_round=float(summary.get("mb_per_round", 0.0)),
+            total_mb=float(summary.get("total_mb", 0.0)),
+            converged=bool(summary.get("converged", False)),
+            history=history, robustness=summary.get("robustness", {}),
+            privacy=summary.get("privacy", {}), selection=summary.get("selection", {}),
+            wall_clock_s=float(summary.get("wall_clock_s", 0.0)),
+        )
+    return benchmark
+
+
 def run_benchmark(cfg: FLConfig, arms: Optional[List[str]] = None,
                   echo: bool = True) -> Benchmark:
     benchmark = Benchmark(cfg)
@@ -179,4 +278,4 @@ def run_benchmark(cfg: FLConfig, arms: Optional[List[str]] = None,
     return benchmark
 
 
-__all__ = ["Benchmark", "run_benchmark", "ARMS"]
+__all__ = ["Benchmark", "run_benchmark", "load_results", "ARMS"]
