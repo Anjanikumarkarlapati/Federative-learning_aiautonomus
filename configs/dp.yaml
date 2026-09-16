@@ -31,7 +31,7 @@ model:
 train:
   rounds: 60               # R_max
   local_epochs: 5          # E
-  adaptive_epochs: true    # FR-10
+  adaptive_epochs: false   # FR-10 available but measured net-negative; see README 9
   min_epochs: 1
   max_epochs: 8
   lr: 0.01                 # eta
@@ -54,6 +54,7 @@ selection:
 
 aggregation:
   quality_aware: true
+  normalize_local_steps: true   # FedNova: required whenever E_k varies
   server_momentum: 0.9
   byzantine_robust: false
   trim_fraction: 0.1

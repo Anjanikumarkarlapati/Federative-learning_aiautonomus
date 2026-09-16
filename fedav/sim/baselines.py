@@ -37,9 +37,13 @@ def proposed_config(base: FLConfig) -> FLConfig:
     """The framework this PRD specifies."""
     return base.merged({
         "name": "proposed_fl",
-        "aggregation": {"quality_aware": True, "server_momentum": 0.9},
+        "aggregation": {"quality_aware": True, "server_momentum": 0.9,
+                        "normalize_local_steps": True},
         "selection": {"trajectory_aware": True},
-        "train": {"adaptive_epochs": True},
+        # adaptive_epochs stays off: measured net-negative even with FedNova
+        # normalisation (README section 9).
+        "train": {"adaptive_epochs": False},
+        "aggregation": {"normalize_local_steps": True},
         "comm": {"fp16": True, "send_deltas": True, "multicast": True,
                  "topk_ratio": 0.25, "adaptive_sparsity": True},
     })

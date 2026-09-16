@@ -234,11 +234,17 @@ def test_trajectory_aware_selection_covers_regions():
 
 # ------------------------------------------------------------- integration
 def test_adaptive_local_epochs_track_compute(cfg, fleet):
+    """FR-10 is off by default (measured net-negative) but must still work."""
+    cfg = cfg.merged({"train": {"adaptive_epochs": True}})
     model = build_model(cfg.model, cfg.data.num_classes, cfg.data.traj_horizon, seed=0)
     trainer = ClientTrainer(cfg, model)
     fast, slow = fleet[0], fleet[1]
     fast.profile.compute_capability, slow.profile.compute_capability = 3.0, 0.2
     assert trainer.local_epochs_for(fast) > trainer.local_epochs_for(slow)
+
+    # ...and must be inert when the switch is off, whatever the hardware.
+    fixed = ClientTrainer(cfg.merged({"train": {"adaptive_epochs": False}}), model)
+    assert fixed.local_epochs_for(fast) == fixed.local_epochs_for(slow)
 
 
 def test_full_federated_round_updates_the_global_model():

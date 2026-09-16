@@ -88,7 +88,10 @@ class TrainConfig:
 
     rounds: int = 60                      # R_max
     local_epochs: int = 5                 # E
-    adaptive_epochs: bool = True          # FR-10: scale E to onboard compute
+    # FR-10 (a "Could" requirement) is implemented and available, but defaults
+    # OFF: measured on this repository it costs 12.2 accuracy points at R=30,
+    # and 6.2 even with normalised averaging. See README section 9.
+    adaptive_epochs: bool = False
     min_epochs: int = 1
     max_epochs: int = 8
     lr: float = 0.01                      # eta
