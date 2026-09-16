@@ -234,7 +234,9 @@ def build_fleet(cfg: FLConfig, byzantine_ids: Optional[List[int]] = None) -> Fle
     global_test = SceneDataset(merged)
 
     # Fleet reference label distribution, broadcast to clients so they can score
-    # their own similarity locally (only a histogram leaves the server).
+    # their own similarity locally.  See the caveat in data/quality.py: in a
+    # deployment this reference is collected under secure aggregation rather
+    # than assembled from per-vehicle histograms in the clear.
     weights = np.array([v.n_k for v in vehicles], dtype=np.float64)
     stacked = np.stack([v.profile.label_histogram for v in vehicles])
     reference = (stacked * weights[:, None]).sum(axis=0) / weights.sum()

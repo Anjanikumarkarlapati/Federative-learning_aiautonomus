@@ -159,7 +159,10 @@ Proposed   w^{t+1} = Σ_k α_k · w_k^{t+1},   α_k = q_k n_k / Σ_j q_j n_j
 
 - `similarity_k = 1 − H(p_k, p_ref)` where `H` is the Hellinger distance
   `H(p,q) = ‖√p − √q‖₂ / √2 ∈ [0,1]` between the vehicle's label histogram and the fleet
-  reference. (Jensen–Shannon distance is available as an alternative.)
+  reference. (Jensen–Shannon distance is available as an alternative.) The reference histogram
+  is the one piece of fleet-level statistics the scheme needs; it is far less revealing than raw
+  data but not free, and in deployment should be collected under secure aggregation — see the
+  caveat at the top of `fedav/data/quality.py`.
 - `quality_k` is an onboard sensor-health score built from blur, occlusion, rain intensity and the
   calibration flag — never from labels.
 - A similarity floor keeps a rare-but-clean region contributing; a vehicle is strongly damped only
@@ -261,9 +264,10 @@ Two design decisions matter:
   averaging them across vehicles is a classic source of FedAvg divergence. Every tensor in the
   state dict is therefore safe to average — unit-tested.
 - **Spatial soft-argmax for the box.** Global average pooling destroys the spatial information a
-  box centre needs; regressing `(cx, cy)` from a pooled vector gave mAP@0.5 ≈ 0. The softmax over
-  the feature grid is differentiable and its expectation is sub-cell accurate, which lifted mAP@0.5
-  from ~0.00 to ~0.8 on the same data and schedule.
+  box centre needs; regressing `(cx, cy)` from a pooled vector gave mAP@0.5 ≈ 0.02. The softmax
+  over the feature grid is differentiable and its expectation is sub-cell accurate: in a
+  like-for-like comparison during development (identical data, seed and schedule) it raised
+  mAP@0.5 from ≈0.02 to ≈0.82.
 
 Loss (PRD 8.1):
 

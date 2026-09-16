@@ -7,6 +7,16 @@ to the fleet reference; ``quality_k`` is an onboard sensor-health signal (blur /
 occlusion / rain / calibration flag).  Both are computed **on the vehicle** - the
 only thing that crosses the V2I link is the resulting scalar (PRD 8.6), so no
 raw data and no per-sample statistics leave the car.
+
+One caveat worth stating plainly: the *fleet reference* the vehicle compares
+itself against has to come from somewhere.  PRD 8.4 defines similarity as a
+"label/feature histogram distance", which presumes the server holds a reference
+histogram; here it is the size-weighted mean of the vehicles' own histograms.
+A histogram is far less revealing than raw sensor data, but it is not nothing -
+in a deployment it should be collected under secure aggregation (the server then
+sees only the fleet-level sum, never one vehicle's class mixture) or replaced by
+a fixed reference agreed offline.  The simulator computes it directly for
+convenience; ``Fleet.reference_histogram`` is the single place to change.
 """
 from __future__ import annotations
 
