@@ -124,6 +124,13 @@ class AVPerceptionNet(nn.Module):
             nn.Linear(feat_dim + num_classes + 2, embed), nn.Hardswish(inplace=True),
             nn.Linear(embed, 2 * traj_horizon),
         )
+        self._init_weights()
+        count = num_parameters(self)
+        if count > cfg.max_parameters:
+            raise ValueError(
+                f"model has {count:,} parameters, above the PRD 8.1 cap of "
+                f"{cfg.max_parameters:,}; lower model.width or stage_channels"
+            )
     def _init_weights(self) -> None:
         for module in self.modules():
             if isinstance(module, nn.Conv2d):

@@ -29,7 +29,7 @@ from ..data.quality import compute_quality_weight
 from ..models.perception import multitask_loss
 from ..privacy.dp import add_gaussian_noise, clip_state
 from ..utils.seeding import derive_seed
-from ..utils.tensors import (StateDict, clone_state, state_sub, to_float_state)
+from ..utils.tensors import StateDict, state_norm, state_sub, to_float_state
 
 REFERENCE_STEP_SECONDS = 0.012      # simulated wall-clock of one SGD step at capability 1.0
 
@@ -166,7 +166,6 @@ class ClientTrainer:
                     derive_seed(round_id, vehicle.client_id, 91, base=cfg.seed)
                 )
                 delta = add_gaussian_noise(delta, dp_sigma, generator)
-        from ..utils.tensors import state_norm
         update_norm = norm_before or state_norm(delta)
 
         # Simulated onboard duration: real wall-clock is machine dependent, so

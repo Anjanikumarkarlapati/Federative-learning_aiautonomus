@@ -15,7 +15,6 @@
 """
 from __future__ import annotations
 
-import copy
 import time
 from typing import Any, Dict, List, Optional
 
@@ -55,7 +54,7 @@ def fedavg_config(base: FLConfig) -> FLConfig:
         "selection": {"trajectory_aware": False, "uptime_threshold": 0.0,
                       "fairness_k": 10**6},
         "train": {"adaptive_epochs": False, "fedprox_mu": 0.0},
-        "comm": {"fp16": False, "send_deltas": True, "broadcast_delta": False,
+        "comm": {"fp16": False, "send_deltas": False, "broadcast_delta": False,
                  "multicast": False, "topk_ratio": 1.0, "adaptive_sparsity": False},
         "dp": {"enabled": False, "secure_aggregation": False},
     })
@@ -188,7 +187,6 @@ def run_local_only(cfg: FLConfig, fleet: Fleet, epochs: Optional[int] = None,
         selection={"clients_trained": len(vehicles)},
         wall_clock_s=time.perf_counter() - started,
     )
-    result.summary_extra = {"per_client_accuracy": per_client}      # type: ignore[attr-defined]
     logger.write_summary({**result.summary(), "per_client_accuracy": per_client})
     return result
 

@@ -60,8 +60,8 @@ def test_local_sgd_step_decreases_the_loss():
         loss, _ = multitask_loss(model(images), labels, boxes, trajectories, cfg)
         loss.backward()
         optimizer.step()
-        first = float(loss) if first is None else first
-    assert float(loss) < first
+        first = float(loss.detach()) if first is None else first
+    assert float(loss.detach()) < first
 
 
 # ---------------------------------------------------------------- serializer
@@ -113,9 +113,18 @@ def test_error_feedback_is_lossless_in_aggregate():
     compressor = TopKCompressor(ratio=0.2, error_feedback=True)
     update = OrderedDict(a=torch.randn(500))
     transmitted = torch.zeros(500)
-    for _ in range(40):
+    rounds = 40
+    for _ in range(rounds):
         transmitted += compressor.compress(0, OrderedDict(a=update["a"].clone()))["a"]
-    assert torch.allclose(transmitted, update["a"] * 40, atol=0.5 * float(update["a"].abs().max()))
+    # The gap between what was sent and the true cumulative update is exactly the
+    # residual still held on the vehicle.  Error-feedback theory bounds it by
+    # ((1-delta)/delta) * ||u|| for a delta-contraction compressor, so it stays
+    # O(1) while the transmitted sum grows with the number of rounds - the
+    # relative error therefore decays like 1/rounds instead of accumulating.
+    norm = torch.linalg.norm(update["a"])
+    gap = torch.linalg.norm(transmitted - update["a"] * rounds)
+    assert gap <= ((1 - 0.2) / 0.2) * norm
+    assert gap / (rounds * norm) < 0.05
 
 
 def test_bandwidth_controller_tightens_then_relaxes():

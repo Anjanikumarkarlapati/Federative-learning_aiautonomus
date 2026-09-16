@@ -148,21 +148,15 @@ def evaluate(model: nn.Module, loader: DataLoader, cfg: ModelConfig,
         per_class[cls] = average_precision(all_scores[mask], all_matched[mask], int(positives[cls]))
     valid = [v for v in per_class.values() if not np.isnan(v)]
 
-    recalls, precisions = [], []
-    for cls in range(num_classes):
-        support = confusion[cls].sum()
-        predicted = confusion[:, cls].sum()
-        if support:
-            recalls.append(confusion[cls, cls] / support)
-        if predicted:
-            precisions.append(confusion[cls, cls] / predicted)
-    f1s = []
+    recalls, f1s = [], []
     for cls in range(num_classes):
         support, predicted = confusion[cls].sum(), confusion[:, cls].sum()
         if support == 0 and predicted == 0:
             continue
         recall = confusion[cls, cls] / support if support else 0.0
         precision = confusion[cls, cls] / predicted if predicted else 0.0
+        if support:
+            recalls.append(recall)
         f1s.append(0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall))
 
     return EvalResult(

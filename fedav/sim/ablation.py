@@ -22,6 +22,16 @@ from ..data.federated import Fleet, build_fleet
 from .baselines import fedavg_config, proposed_config
 from .runner import run_experiment
 
+# Every arm starts from the standard-FedAvg configuration and flips exactly one
+# switch, so the difference in the result is attributable to that switch alone.
+# The transport stack is held constant across all of them; ``proposed_full``
+# adds it back to show the communication effect separately.
+_ALL_ALGORITHMIC: Dict[str, Any] = {
+    "aggregation": {"quality_aware": True, "server_momentum": 0.9},
+    "selection": {"trajectory_aware": True, "uptime_threshold": 0.55, "fairness_k": 12},
+    "train": {"adaptive_epochs": True},
+}
+
 ABLATION_ARMS: Dict[str, Dict[str, Any]] = {
     "fedavg_baseline": {},
     "quality_only": {"aggregation": {"quality_aware": True}},
@@ -29,6 +39,7 @@ ABLATION_ARMS: Dict[str, Dict[str, Any]] = {
                                      "fairness_k": 12}},
     "momentum_only": {"aggregation": {"server_momentum": 0.9}},
     "adaptive_epochs_only": {"train": {"adaptive_epochs": True}},
+    "all_algorithmic": _ALL_ALGORITHMIC,
 }
 
 
@@ -42,8 +53,9 @@ def run_ablation(cfg: FLConfig, fleet: Optional[Fleet] = None, echo: bool = True
         arm = base.merged({**overrides, "name": f"abl_{name}"})
         results[name] = run_experiment(arm, fleet, echo).summary()
 
-    proposed = proposed_config(cfg).merged({"name": "abl_proposed"})
-    results["proposed"] = run_experiment(proposed, fleet, echo).summary()
+    # + the compressed / multicast transport stack on top of the algorithmic arms
+    proposed = proposed_config(cfg).merged({"name": "abl_proposed_full"})
+    results["proposed_full"] = run_experiment(proposed, fleet, echo).summary()
 
     if extras:
         dp_arm = proposed_config(cfg).merged({"name": "abl_proposed_dp",

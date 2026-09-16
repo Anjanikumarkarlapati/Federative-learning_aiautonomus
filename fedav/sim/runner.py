@@ -23,7 +23,6 @@ run that hits ``R_max`` without converging still returns a usable model
 """
 from __future__ import annotations
 
-import copy
 import os
 import time
 from dataclasses import dataclass, field
@@ -45,8 +44,9 @@ from ..server.aggregator import ContributedUpdate, FedAggregator, has_converged
 from ..server.secure import SecureAggregationMasks, SecureChannel
 from ..server.selection import ClientSelector
 from ..utils.seeding import rng as make_rng, seed_everything
-from ..utils.tensors import (StateDict, clone_state, state_norm, state_sub,
-                             state_zeros_like, to_float_state, weighted_average)
+from ..utils.tensors import (StateDict, clone_state, state_add, state_norm,
+                             state_sub, state_zeros_like, to_float_state,
+                             weighted_average)
 
 
 @dataclass
@@ -114,6 +114,7 @@ class SimRunner:
         )
         self.logger = logger or MetricsLogger(cfg.name, cfg.out_dir,
                                               cfg.fingerprint(), echo=echo)
+        self._last_sync: Dict[int, int] = {}      # client -> round whose model it holds
         self.accountant: Optional[PrivacyAccountant] = None
         if cfg.dp.enabled:
             sampling_rate = min(1.0, cfg.selection.fraction)
@@ -124,17 +125,38 @@ class SimRunner:
 
     # ------------------------------------------------------------------ round
     def _broadcast(self, state: StateDict, previous: Optional[StateDict],
-                   num_clients: int, round_id: int) -> int:
-        """Server -> vehicles.  Ships a delta when the clients already hold w^(r-1)."""
-        payload_state = state
-        if self.cfg.comm.broadcast_delta and previous is not None:
-            payload_state = state_sub(state, previous)
-        blob = self.serializer.pack(payload_state, {"round_id": round_id, "kind": "global"})
-        # A real RSU multicasts the global model once into its coverage cell;
-        # unicast (the standard-FedAvg baseline) pays for it per vehicle.
-        recipients = 1 if self.cfg.comm.multicast else num_clients
-        size, _ = self.channel.send_down(blob, recipients)
-        return size
+                   selected: List[int], round_id: int) -> int:
+        """Server -> vehicles (FR-06), with honest byte accounting.
+
+        A vehicle can only reconstruct ``w^(r)`` from a delta if it already holds
+        ``w^(r-1)``; one that sat out the previous round needs the full model.
+        Selection means most rounds carry a mix, so the two groups are costed
+        separately.  Under ``comm.multicast`` each group is one RSU transmission
+        into the coverage cell; otherwise every vehicle is billed a unicast copy.
+        """
+        delta_group, full_group = [], []
+        for client_id in selected:
+            if (self.cfg.comm.broadcast_delta and previous is not None
+                    and self._last_sync.get(client_id) == round_id - 1):
+                delta_group.append(client_id)
+            else:
+                full_group.append(client_id)
+
+        total = 0
+        if delta_group:
+            blob = self.serializer.pack(state_sub(state, previous),
+                                        {"round_id": round_id, "kind": "global_delta"})
+            size, _ = self.channel.send_down(blob, 1 if self.cfg.comm.multicast
+                                             else len(delta_group))
+            total += size
+        if full_group:
+            blob = self.serializer.pack(state, {"round_id": round_id, "kind": "global"})
+            size, _ = self.channel.send_down(blob, 1 if self.cfg.comm.multicast
+                                             else len(full_group))
+            total += size
+        for client_id in selected:
+            self._last_sync[client_id] = round_id
+        return total
 
     def _collect(self, selected: List[int], round_id: int
                  ) -> Tuple[List[ContributedUpdate], List[ClientUpdate], Dict[str, int]]:
@@ -157,6 +179,10 @@ class SimRunner:
                 stats["straggler"] += 1            # PRD 16: past the round window
                 continue
             payload = self.compressor.compress(client_id, update.delta)
+            if not self.cfg.comm.send_deltas:
+                # Classic FedAvg puts the full local weights on the wire; the
+                # server differences them against w^(r) to recover the update.
+                payload = state_add(self.global_state, payload, alpha=1.0)
             blob = self.serializer.pack(payload, update.meta())
             delivered, _, _ = self.channel.send_up(blob, vehicle.profile.link_uptime, generator)
             if not delivered:
@@ -164,6 +190,8 @@ class SimRunner:
                 continue
             try:
                 delta, meta = self.serializer.unpack(blob)
+                if not self.cfg.comm.send_deltas:
+                    delta = state_sub(delta, self.global_state)
             except ChecksumError:
                 stats["corrupt"] += 1
                 continue
@@ -217,7 +245,7 @@ class SimRunner:
                 continue
             # (5) broadcast the current global model
             self._broadcast(self.global_state, previous_broadcast,
-                            len(selection.selected), round_id)
+                            selection.selected, round_id)
             previous_broadcast = clone_state(self.global_state)
 
             # (4-8) local training + uplink
