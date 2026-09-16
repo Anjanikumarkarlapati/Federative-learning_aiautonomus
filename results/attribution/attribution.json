@@ -1,0 +1,95 @@
+{
+  "fedavg_control": {
+    "name": "fedavg_control",
+    "accuracy": 0.70778,
+    "final_accuracy": 0.70778,
+    "mAP50": 0.06107,
+    "ade": 0.20788,
+    "fde": 0.36397,
+    "rounds_run": 30,
+    "rounds_to_target": null,
+    "mb_per_round": 74.5537,
+    "total_mb": 2236.612,
+    "converged": true,
+    "robustness": {
+      "client_acc_mean": 0.68544,
+      "client_acc_std": 0.15382,
+      "client_acc_min": 0.22449,
+      "client_acc_p10": 0.52181,
+      "client_acc_spread": 0.72288
+    },
+    "privacy": {
+      "mode": "no DP noise",
+      "raw_data_egress": false,
+      "secure_aggregation": false
+    },
+    "selection": {
+      "clients_never_selected": 0,
+      "selection_gini": 0.5032888888888889,
+      "mean_participation": 9.0
+    },
+    "wall_clock_s": 982.9
+  },
+  "algorithmic_only": {
+    "name": "algorithmic_only",
+    "accuracy": 0.61611,
+    "final_accuracy": 0.61611,
+    "mAP50": 0.05389,
+    "ade": 0.20942,
+    "fde": 0.3652,
+    "rounds_run": 30,
+    "rounds_to_target": null,
+    "mb_per_round": 74.5527,
+    "total_mb": 2236.581,
+    "converged": false,
+    "robustness": {
+      "client_acc_mean": 0.59109,
+      "client_acc_std": 0.15481,
+      "client_acc_min": 0.28571,
+      "client_acc_p10": 0.36636,
+      "client_acc_spread": 0.5989
+    },
+    "privacy": {
+      "mode": "no DP noise",
+      "raw_data_egress": false,
+      "secure_aggregation": false
+    },
+    "selection": {
+      "clients_never_selected": 0,
+      "selection_gini": 0.4543999999999999,
+      "mean_participation": 9.0
+    },
+    "wall_clock_s": 767.2
+  },
+  "algorithmic_plus_compression": {
+    "name": "algorithmic_plus_compression",
+    "accuracy": 0.60889,
+    "final_accuracy": 0.60889,
+    "mAP50": 0.05792,
+    "ade": 0.20531,
+    "fde": 0.36032,
+    "rounds_run": 30,
+    "rounds_to_target": null,
+    "mb_per_round": 8.6827,
+    "total_mb": 260.482,
+    "converged": false,
+    "robustness": {
+      "client_acc_mean": 0.56889,
+      "client_acc_std": 0.16549,
+      "client_acc_min": 0.2449,
+      "client_acc_p10": 0.33171,
+      "client_acc_spread": 0.68844
+    },
+    "privacy": {
+      "mode": "no DP noise",
+      "raw_data_egress": false,
+      "secure_aggregation": true
+    },
+    "selection": {
+      "clients_never_selected": 0,
+      "selection_gini": 0.4543999999999999,
+      "mean_participation": 9.0
+    },
+    "wall_clock_s": 856.9
+  }
+}

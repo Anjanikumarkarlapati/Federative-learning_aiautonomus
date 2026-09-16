@@ -1,0 +1,33 @@
+{
+  "name": "algorithmic_plus_compression",
+  "accuracy": 0.60889,
+  "final_accuracy": 0.60889,
+  "mAP50": 0.05792,
+  "ade": 0.20531,
+  "fde": 0.36032,
+  "rounds_run": 30,
+  "rounds_to_target": null,
+  "mb_per_round": 8.6827,
+  "total_mb": 260.482,
+  "converged": false,
+  "robustness": {
+    "client_acc_mean": 0.56889,
+    "client_acc_std": 0.16549,
+    "client_acc_min": 0.2449,
+    "client_acc_p10": 0.33171,
+    "client_acc_spread": 0.68844
+  },
+  "privacy": {
+    "mode": "no DP noise",
+    "raw_data_egress": false,
+    "secure_aggregation": true
+  },
+  "selection": {
+    "clients_never_selected": 0,
+    "selection_gini": 0.4543999999999999,
+    "mean_participation": 9.0
+  },
+  "wall_clock_s": 856.9,
+  "config_fingerprint": "205caef9ab17",
+  "run": "algorithmic_plus_compression"
+}

@@ -450,14 +450,29 @@ numbers are reported above rather than whichever flatters the proposed method. T
 that the two arms end up within about a point of each other, and the proposed arm gets there using
 **8.6× less bandwidth**.
 
-**Why is the proposed arm slower?** The likely cause is the transport, not the aggregation: top-k
-sparsification at 25% density with error feedback *delays* coordinates rather than dropping them,
-which provably preserves the limit but costs early-round progress, and server momentum smooths the
-trajectory further. That is a hypothesis, and the repository tests it rather than asserting it —
-`python -m fedav.cli ablation` runs each ingredient with transport held constant, so the
-algorithmic contribution and the compression cost are separated. See
-`runs_attrib/attribution.json` for the controlled three-arm comparison
-(FedAvg control / algorithmic changes only / algorithmic + compression).
+**Why is the proposed arm slower? — measured, not guessed.** My first hypothesis was the
+transport: top-k sparsification delays coordinates, so it should cost early rounds. A controlled
+three-arm run at `R = 30` on the same fleet and seed, with transport held constant where noted,
+falsifies that:
+
+| Arm (R = 30) | Accuracy | MB/round |
+|---|---|---|
+| FedAvg control | **70.8%** | 74.55 |
+| Algorithmic changes only (quality + selection + momentum + adaptive `E`) | 61.6% | 74.55 |
+| Algorithmic changes + compression | 60.9% | 8.68 |
+
+Compression costs **0.7 points**. The PRD's *algorithmic* enhancements cost **9.2 points** at
+round 30 — they are what slows convergence, and the communication stack is very nearly free. The
+per-ingredient breakdown is in `results/ingredients/` (`python -m fedav.cli ablation` reproduces
+it).
+
+This is worth stating carefully, because it is not the same as "the enhancements are bad". By
+round 60 the proposed arm has caught up and passes FedAvg on tail-averaged accuracy (81.1% vs
+80.1%). The consistent reading across both runs is that quality weighting and server momentum
+**trade early-round speed for end-state stability** — the opposite of the PRD's prediction, which
+expected them to accelerate convergence. On this data, at this scale, the PRD's efficiency
+rationale for those two mechanisms does not hold; their value shows up as a steadier curve and a
+lower final variance, not as fewer rounds.
 
 **Caveats that bound all of the above.** One seed, one synthetic dataset, ~7,700 training samples
 total. Differences of a point or two are within run-to-run noise at this scale and should not be
