@@ -1,0 +1,33 @@
+{
+  "name": "momentum_only",
+  "accuracy": 0.75,
+  "final_accuracy": 0.75,
+  "mAP50": 0.07666,
+  "ade": 0.20835,
+  "fde": 0.36499,
+  "rounds_run": 30,
+  "rounds_to_target": null,
+  "mb_per_round": 74.5563,
+  "total_mb": 2236.69,
+  "converged": false,
+  "robustness": {
+    "client_acc_mean": 0.70037,
+    "client_acc_std": 0.1566,
+    "client_acc_min": 0.2449,
+    "client_acc_p10": 0.49727,
+    "client_acc_spread": 0.7551
+  },
+  "privacy": {
+    "mode": "no DP noise",
+    "raw_data_egress": false,
+    "secure_aggregation": false
+  },
+  "selection": {
+    "clients_never_selected": 0,
+    "selection_gini": 0.5032888888888889,
+    "mean_participation": 9.0
+  },
+  "wall_clock_s": 1015.4,
+  "config_fingerprint": "45a806df9fa1",
+  "run": "momentum_only"
+}

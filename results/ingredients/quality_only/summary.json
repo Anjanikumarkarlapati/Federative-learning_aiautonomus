@@ -1,0 +1,33 @@
+{
+  "name": "quality_only",
+  "accuracy": 0.72778,
+  "final_accuracy": 0.72778,
+  "mAP50": 0.06459,
+  "ade": 0.21192,
+  "fde": 0.36981,
+  "rounds_run": 30,
+  "rounds_to_target": null,
+  "mb_per_round": 74.5571,
+  "total_mb": 2236.712,
+  "converged": true,
+  "robustness": {
+    "client_acc_mean": 0.67631,
+    "client_acc_std": 0.10575,
+    "client_acc_min": 0.38776,
+    "client_acc_p10": 0.53626,
+    "client_acc_spread": 0.54773
+  },
+  "privacy": {
+    "mode": "no DP noise",
+    "raw_data_egress": false,
+    "secure_aggregation": false
+  },
+  "selection": {
+    "clients_never_selected": 0,
+    "selection_gini": 0.5032888888888889,
+    "mean_participation": 9.0
+  },
+  "wall_clock_s": 879.4,
+  "config_fingerprint": "3e0a1fde02c5",
+  "run": "quality_only"
+}

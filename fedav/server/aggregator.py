@@ -15,7 +15,23 @@ and adds two stabilisers for heterogeneous fleets (PRD 8.8):
   delta, which damps the oscillation caused by clients pulling in different
   directions between rounds;
 * an optional **coordinate-wise trimmed mean** for Byzantine robustness
-  (PRD 15/16), which discards the extreme tails per coordinate before averaging.
+  (PRD 15/16), which discards the extreme tails per coordinate before averaging;
+* **normalised averaging** (FedNova, Wang et al. 2020) whenever vehicles take
+  different numbers of local steps.
+
+The last one matters more than it looks.  FR-10 scales local epochs to onboard
+compute, so tau_k differs across vehicles - and a plain weighted mean of raw
+deltas then converges to the wrong point.  A client that took 8 epochs simply
+contributes a larger vector than one that took 1, so the aggregate silently
+over-weights fast ECUs regardless of alpha_k; this is the *objective
+inconsistency* problem.  Measured on this repository, adaptive epochs alone cost
+12.2 accuracy points against the FedAvg control at R=30 - the single most harmful
+ingredient - while the other three PRD mechanisms each helped.  Normalising each
+update by its own step count and rescaling by the weighted mean step count,
+
+    d = (sum_k alpha_k tau_k) * sum_k alpha_k (dW_k / tau_k)
+
+removes the bias while preserving the effective step size.
 
 Because clients transmit deltas, aggregation is a weighted mean of deltas
 followed by ``w^{t+1} = w^{t} + d`` - algebraically identical to averaging the
@@ -53,6 +69,7 @@ class ContributedUpdate:
     delta: StateDict
     n_k: int
     q_k: float
+    steps: int = 1          # tau_k, local SGD steps taken this round
 
 
 class FedAggregator:
@@ -74,13 +91,24 @@ class FedAggregator:
             raise ValueError("no updates received this round")
         alphas = self.weights_for(updates)
         deltas = [u.delta for u in updates]
+
+        # FedNova: with heterogeneous tau_k a plain mean solves the wrong problem.
+        scale = 1.0
+        if self.cfg.normalize_local_steps:
+            taus = np.array([max(int(u.steps), 1) for u in updates], dtype=np.float64)
+            if taus.max() != taus.min():
+                scale = float((alphas * taus).sum())
+                deltas = [state_scale(d, 1.0 / t) for d, t in zip(deltas, taus)]
+
         if self.cfg.byzantine_robust and len(updates) >= 4:
             reference = deltas[0]
             stack = torch.stack([flatten(d, list(reference.keys())) for d in deltas])
             robust = trimmed_mean(stack, torch.tensor(alphas, dtype=torch.float32),
                                   self.cfg.trim_fraction)
-            return unflatten(robust, reference), alphas
-        return weighted_average(deltas, alphas.tolist()), alphas
+            aggregated = unflatten(robust, reference)
+        else:
+            aggregated = weighted_average(deltas, alphas.tolist())
+        return (state_scale(aggregated, scale) if scale != 1.0 else aggregated), alphas
 
     def apply(self, global_state: StateDict, aggregated: StateDict,
               alphas: np.ndarray, client_ids: Sequence[int],

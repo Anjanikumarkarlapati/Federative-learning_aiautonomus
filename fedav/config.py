@@ -74,6 +74,7 @@ class AggregationConfig:
     """Quality-aware FedAvg (PRD 8.4) + robustness (PRD 15/16)."""
 
     quality_aware: bool = True
+    normalize_local_steps: bool = True    # FedNova: remove objective inconsistency
     server_momentum: float = 0.9          # beta
     byzantine_robust: bool = False        # coordinate-wise trimmed mean
     trim_fraction: float = 0.1

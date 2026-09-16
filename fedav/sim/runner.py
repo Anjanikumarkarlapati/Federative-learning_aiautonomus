@@ -195,8 +195,9 @@ class SimRunner:
             except ChecksumError:
                 stats["corrupt"] += 1
                 continue
-            contributed.append(ContributedUpdate(client_id=int(meta["client_id"]), delta=delta,
-                                                 n_k=int(meta["n_k"]), q_k=float(meta["q_k"])))
+            contributed.append(ContributedUpdate(
+                client_id=int(meta["client_id"]), delta=delta, n_k=int(meta["n_k"]),
+                q_k=float(meta["q_k"]), steps=int(meta.get("steps", 1))))
             raw_updates.append(update)
         return contributed, raw_updates, stats
 

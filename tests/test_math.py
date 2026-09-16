@@ -168,3 +168,41 @@ def test_average_precision_all_point_interpolation():
     ap = average_precision(np.array([0.9, 0.8, 0.7]), np.array([1, 0, 1]), 2)
     assert ap == pytest.approx(0.5 * 1.0 + 0.5 * (2 / 3), rel=1e-6)
     assert average_precision(np.zeros(0), np.zeros(0), 5) == 0.0
+
+
+# ------------------------------------------------- normalised averaging (FedNova)
+def test_normalisation_is_inert_when_step_counts_match():
+    """Equal tau_k must reduce exactly to plain weighted FedAvg."""
+    updates = [ContributedUpdate(i, OrderedDict(w=torch.full((2,), float(v))), 10, 1.0, steps=5)
+               for i, v in enumerate([1.0, 3.0])]
+    plain = FedAggregator(AggregationConfig(server_momentum=0.0, normalize_local_steps=False))
+    normalised = FedAggregator(AggregationConfig(server_momentum=0.0, normalize_local_steps=True))
+    a, _ = plain.combine(updates)
+    b, _ = normalised.combine(updates)
+    assert torch.allclose(a["w"], b["w"], atol=1e-6)
+
+
+def test_normalisation_removes_the_fast_ecu_bias():
+    """A vehicle that took more steps must not dominate merely by taking more.
+
+    Client 0 runs 8 local steps making 1.0 of progress each; client 1 runs a
+    single step making 4.0 of progress. Their per-step progress is what should
+    be averaged (2.5), rescaled by the weighted mean step count (4.5) -> 11.25.
+    A plain mean of the raw deltas gives 6.0, silently favouring the fast ECU.
+    """
+    updates = [
+        ContributedUpdate(0, OrderedDict(w=torch.full((2,), 8.0)), 100, 1.0, steps=8),
+        ContributedUpdate(1, OrderedDict(w=torch.full((2,), 4.0)), 100, 1.0, steps=1),
+    ]
+    plain = FedAggregator(AggregationConfig(server_momentum=0.0, normalize_local_steps=False))
+    normalised = FedAggregator(AggregationConfig(server_momentum=0.0, normalize_local_steps=True))
+    assert plain.combine(updates)[0]["w"][0].item() == pytest.approx(6.0)
+    assert normalised.combine(updates)[0]["w"][0].item() == pytest.approx(11.25)
+
+
+def test_normalisation_preserves_the_simplex_weights():
+    updates = [ContributedUpdate(i, OrderedDict(w=torch.ones(2)), 10 * (i + 1), 0.5,
+                                 steps=i + 1) for i in range(4)]
+    aggregator = FedAggregator(AggregationConfig(normalize_local_steps=True))
+    _, alphas = aggregator.combine(updates)
+    assert math.isclose(alphas.sum(), 1.0, rel_tol=1e-12)

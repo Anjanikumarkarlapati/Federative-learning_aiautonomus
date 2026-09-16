@@ -7,4 +7,6 @@ __pycache__/
 data/raw/
 runs/
 runs_attrib/
+runs_fix/
+runs_ingredient/
 venv/
