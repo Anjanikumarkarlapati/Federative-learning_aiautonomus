@@ -37,7 +37,7 @@
   "train": {
     "rounds": 60,
     "local_epochs": 5,
-    "adaptive_epochs": true,
+    "adaptive_epochs": false,
     "min_epochs": 1,
     "max_epochs": 8,
     "lr": 0.01,
@@ -61,6 +61,7 @@
   },
   "aggregation": {
     "quality_aware": true,
+    "normalize_local_steps": true,
     "server_momentum": 0.9,
     "byzantine_robust": false,
     "trim_fraction": 0.1,
