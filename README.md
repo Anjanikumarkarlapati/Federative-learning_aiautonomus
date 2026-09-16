@@ -12,7 +12,7 @@ section. It builds on **FedAvg** and adds the four enhancements the PRD specifie
 |---|---|
 | **Quality-aware aggregation** (`q_k`) | off-distribution / sensor-degraded vehicles contribute less |
 | **Connectivity- & trajectory-aware selection** | rounds don't stall on unstable V2I links, regional coverage preserved |
-| **Adaptive local epochs** (`E_k`) | weak ECUs don't become stragglers, small shards don't over-fit |
+| **Adaptive local epochs** (`E_k`) | implemented, but **measured harmful and off by default** — see [section 9](#9-results) |
 | **Optional DP + secure aggregation** | formal `(ε, δ)` budget; the RSU only ever sees a *sum* |
 
 ---
@@ -345,7 +345,7 @@ All defaults are PRD section 10.
 | — | `seed` | 1337 | everything is seeded from here |
 | `train` | `rounds` | 60 | `R_max` |
 | `train` | `local_epochs` | 5 | `E` (per-vehicle `E_k` when adaptive) |
-| `train` | `adaptive_epochs` | true | FR-10, scale `E_k` to onboard compute |
+| `train` | `adaptive_epochs` | **false** | FR-10, scale `E_k` to onboard compute; off by default, measured net-negative (section 9) |
 | `train` | `lr` | 0.01 | `η`, cosine-decayed |
 | `train` | `momentum` | 0.9 | client SGD `β` |
 | `train` | `batch_size` | 32 | `B` |
@@ -358,6 +358,7 @@ All defaults are PRD section 10.
 | `selection` | `fairness_k` | 12 | every vehicle within `K` rounds |
 | `selection` | `round_timeout_s` | 45 | straggler cut-off |
 | `aggregation` | `quality_aware` | true | `q_k` weighting |
+| `aggregation` | `normalize_local_steps` | true | FedNova; required whenever `E_k` varies |
 | `aggregation` | `server_momentum` | 0.9 | `β` on the aggregate |
 | `aggregation` | `byzantine_robust` | false | trimmed mean + norm filter |
 | `aggregation` | `q_min` / `q_max` | 0.05 / 1.0 | clamp on `q_k` |
@@ -571,7 +572,8 @@ fedav/
 | FR-07 | stop on `‖Δw‖ ≤ ε` or `R_max` | `server/aggregator.py::has_converged` |
 | FR-08 | log per-round metrics | `metrics/logger.py` → `rounds.jsonl` / `rounds.csv` |
 | FR-09 | compare against baselines | `sim/baselines.py`, `sim/benchmark.py` |
-| FR-10 | scale `E` to onboard compute | `ClientTrainer.local_epochs_for` |
+| FR-10 | scale `E` to onboard compute | `ClientTrainer.local_epochs_for` — implemented and tested, **default off**: measured −12.2 accuracy points (−6.2 with normalised averaging). The one knowing deviation from the PRD; evidence in `results/ingredients/` |
+| 8.8 | objective consistency under varying `E_k` | `FedAggregator.combine` (FedNova normalisation) |
 | 8.5 | fairness guard, min coverage per `K` rounds | `ClientSelector`, `coverage()` |
 | 8.9 | convergence criterion | `has_converged` |
 | 12.1 | accuracy, rounds, MB/round, robustness | `metrics/evaluation.py`, `RunResult.summary` |
@@ -598,8 +600,14 @@ Stated plainly, because a simulation that overstates itself is worse than no sim
    parametric (PRD 18 lists this risk).
 4. **Secure aggregation has no dropout-recovery protocol** (no Shamir shares); masks are re-derived
    over the set that actually reported. It also cannot be combined with trimmed-mean robustness.
-5. **Simulation only.** `v1` is explicitly not an on-vehicle deployment (PRD 3.2).
-6. **Roadmap** (PRD 20): certified DP budgets, blockchain contribution auditing, 5G/V2X
+5. **One knowing deviation from the PRD.** FR-10 (adaptive local epochs) ships disabled because
+   it measurably hurts — see section 9. It is implemented, configurable and tested, so enabling it
+   is a one-line config change; the default reflects the evidence, not the spec.
+6. **Averaged robustness is not tail robustness.** The proposed arm improves cross-client
+   dispersion but leaves the worst-served vehicle 9.6 points worse off. For a safety-relevant
+   system that trade may be unacceptable; `aggregation.q_min` bounds it.
+7. **Simulation only.** `v1` is explicitly not an on-vehicle deployment (PRD 3.2).
+8. **Roadmap** (PRD 20): certified DP budgets, blockchain contribution auditing, 5G/V2X
    latency-aware scheduling, verifiable secret sharing to combine secure and robust aggregation.
 
 ---
