@@ -1,0 +1,265 @@
+{
+  "config": {
+    "name": "proposed_fl",
+    "num_clients": 50,
+    "seed": 1337,
+    "device": "cpu",
+    "workers": 0,
+    "out_dir": "runs",
+    "data": {
+      "num_classes": 6,
+      "image_size": 32,
+      "traj_horizon": 6,
+      "samples_per_client": 220,
+      "quantity_skew": 0.45,
+      "dirichlet_alpha": 0.4,
+      "feature_skew": true,
+      "train_share": 0.7,
+      "val_share": 0.15,
+      "test_share": 0.15,
+      "global_test_size": 1800,
+      "augment": true
+    },
+    "model": {
+      "width": 1.0,
+      "stem_channels": 24,
+      "stage_channels": [
+        32,
+        64,
+        128
+      ],
+      "embed_dim": 192,
+      "dropout": 0.05,
+      "box_dim": 4,
+      "lambda_box": 1.0,
+      "lambda_traj": 0.5,
+      "max_parameters": 6000000
+    },
+    "train": {
+      "rounds": 60,
+      "local_epochs": 5,
+      "adaptive_epochs": true,
+      "min_epochs": 1,
+      "max_epochs": 8,
+      "lr": 0.01,
+      "cosine_decay": true,
+      "momentum": 0.9,
+      "weight_decay": 0.0005,
+      "batch_size": 32,
+      "fedprox_mu": 0.0,
+      "tolerance": 0.001,
+      "target_accuracy": 0.9,
+      "grad_clip": 5.0
+    },
+    "selection": {
+      "fraction": 0.3,
+      "uptime_threshold": 0.55,
+      "trajectory_aware": true,
+      "fairness_k": 12,
+      "min_clients": 2,
+      "round_timeout_s": 45.0,
+      "seed_jitter": true
+    },
+    "aggregation": {
+      "quality_aware": true,
+      "server_momentum": 0.9,
+      "byzantine_robust": false,
+      "trim_fraction": 0.1,
+      "q_min": 0.05,
+      "q_max": 1.0
+    },
+    "dp": {
+      "enabled": false,
+      "clip_norm": 1.0,
+      "epsilon": 8.0,
+      "delta": 1e-05,
+      "secure_aggregation": true
+    },
+    "comm": {
+      "fp16": true,
+      "gzip_level": 6,
+      "send_deltas": true,
+      "broadcast_delta": true,
+      "multicast": true,
+      "topk_ratio": 0.25,
+      "error_feedback": true,
+      "min_topk_ratio": 0.02,
+      "adaptive_sparsity": true,
+      "mb_budget_per_round": 9.0
+    }
+  },
+  "results": {
+    "centralized": {
+      "name": "centralized",
+      "accuracy": 0.89889,
+      "final_accuracy": 0.89889,
+      "mAP50": 0.5443,
+      "ade": 0.18772,
+      "fde": 0.33244,
+      "rounds_run": 60,
+      "rounds_to_target": null,
+      "mb_per_round": 0.0,
+      "total_mb": 90.234,
+      "converged": true,
+      "robustness": {
+        "client_acc_mean": 0.82644,
+        "client_acc_std": 0.12636,
+        "client_acc_min": 0.50909,
+        "client_acc_p10": 0.67764,
+        "client_acc_spread": 0.49091
+      },
+      "privacy": {
+        "mode": "none - raw sensor data centralised",
+        "raw_data_egress": true,
+        "raw_data_mb": 90.23
+      },
+      "selection": {
+        "note": "all vehicles, every epoch"
+      },
+      "wall_clock_s": 1143.5
+    },
+    "local_only": {
+      "name": "local_only",
+      "accuracy": 0.2519,
+      "final_accuracy": 0.2519,
+      "mAP50": 0.00502,
+      "ade": 0.32343,
+      "fde": 0.55608,
+      "rounds_run": 75,
+      "rounds_to_target": null,
+      "mb_per_round": 0.0,
+      "total_mb": 0.0,
+      "converged": true,
+      "robustness": {
+        "client_acc_mean": 0.2519,
+        "client_acc_std": 0.06866,
+        "client_acc_min": 0.16889,
+        "client_acc_p10": 0.17222,
+        "client_acc_spread": 0.22278
+      },
+      "privacy": {
+        "mode": "no communication at all",
+        "raw_data_egress": false
+      },
+      "selection": {
+        "clients_trained": 12
+      },
+      "wall_clock_s": 270.3
+    },
+    "std_fedavg": {
+      "name": "std_fedavg",
+      "accuracy": 0.83,
+      "final_accuracy": 0.83,
+      "mAP50": 0.08922,
+      "ade": 0.19664,
+      "fde": 0.34489,
+      "rounds_run": 60,
+      "rounds_to_target": null,
+      "mb_per_round": 74.561,
+      "total_mb": 4473.658,
+      "converged": true,
+      "robustness": {
+        "client_acc_mean": 0.78539,
+        "client_acc_std": 0.13038,
+        "client_acc_min": 0.46341,
+        "client_acc_p10": 0.61998,
+        "client_acc_spread": 0.53659
+      },
+      "privacy": {
+        "mode": "no DP noise",
+        "raw_data_egress": false,
+        "secure_aggregation": false
+      },
+      "selection": {
+        "clients_never_selected": 0,
+        "selection_gini": 0.5376888888888889,
+        "mean_participation": 18.0
+      },
+      "wall_clock_s": 1956.9
+    },
+    "proposed_fl": {
+      "name": "proposed_fl",
+      "accuracy": 0.82278,
+      "final_accuracy": 0.82278,
+      "mAP50": 0.0813,
+      "ade": 0.20449,
+      "fde": 0.35954,
+      "rounds_run": 60,
+      "rounds_to_target": null,
+      "mb_per_round": 8.6723,
+      "total_mb": 520.34,
+      "converged": false,
+      "robustness": {
+        "client_acc_mean": 0.76992,
+        "client_acc_std": 0.13827,
+        "client_acc_min": 0.38776,
+        "client_acc_p10": 0.61946,
+        "client_acc_spread": 0.61224
+      },
+      "privacy": {
+        "mode": "no DP noise",
+        "raw_data_egress": false,
+        "secure_aggregation": true
+      },
+      "selection": {
+        "clients_never_selected": 0,
+        "selection_gini": 0.46853333333333325,
+        "mean_participation": 18.0
+      },
+      "wall_clock_s": 1763.3
+    }
+  },
+  "acceptance": {
+    "accuracy_target": {
+      "requirement": "accuracy >= 90.00%",
+      "observed": 0.8228,
+      "pass": false
+    },
+    "convergence_speedup": {
+      "requirement": "rounds-to-target cut by >= 25% vs standard FedAvg",
+      "proposed_rounds": null,
+      "fedavg_rounds": null,
+      "reduction": null,
+      "pass": false
+    },
+    "communication_saving": {
+      "requirement": "MB/round cut by >= 30% vs standard FedAvg",
+      "proposed_mb": 8.6723,
+      "fedavg_mb": 74.561,
+      "reduction": 0.8837,
+      "pass": true
+    },
+    "communication_budget": {
+      "requirement": "MB/round <= 9.0",
+      "observed": 8.6723,
+      "pass": true
+    },
+    "non_iid_robustness": {
+      "requirement": "cross-client accuracy dispersion <= standard FedAvg",
+      "proposed_std": 0.13827,
+      "fedavg_std": 0.13038,
+      "pass": false
+    },
+    "convergence_speedup_relative": {
+      "requirement": "rounds to 95% of the centralized ceiling, cut by >= 25%",
+      "threshold_accuracy": 0.8539,
+      "proposed_rounds": null,
+      "fedavg_rounds": null,
+      "reduction": null,
+      "pass": false
+    },
+    "accuracy_vs_ceiling": {
+      "requirement": "proposed accuracy >= 95% of the centralized ceiling",
+      "centralized": 0.8989,
+      "proposed": 0.8228,
+      "ratio": 0.9153,
+      "pass": false
+    },
+    "privacy": {
+      "requirement": "no raw sensor data egress in any federated arm",
+      "observed": true,
+      "pass": true
+    },
+    "status": "FAIL"
+  }
+}

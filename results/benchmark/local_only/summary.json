@@ -1,0 +1,44 @@
+{
+  "name": "local_only",
+  "accuracy": 0.2519,
+  "final_accuracy": 0.2519,
+  "mAP50": 0.00502,
+  "ade": 0.32343,
+  "fde": 0.55608,
+  "rounds_run": 75,
+  "rounds_to_target": null,
+  "mb_per_round": 0.0,
+  "total_mb": 0.0,
+  "converged": true,
+  "robustness": {
+    "client_acc_mean": 0.2519,
+    "client_acc_std": 0.06866,
+    "client_acc_min": 0.16889,
+    "client_acc_p10": 0.17222,
+    "client_acc_spread": 0.22278
+  },
+  "privacy": {
+    "mode": "no communication at all",
+    "raw_data_egress": false
+  },
+  "selection": {
+    "clients_trained": 12
+  },
+  "wall_clock_s": 270.3,
+  "per_client_accuracy": {
+    "0": 0.25555555555555554,
+    "4": 0.2972222222222222,
+    "8": 0.39166666666666666,
+    "12": 0.2627777777777778,
+    "16": 0.1688888888888889,
+    "20": 0.27555555555555555,
+    "25": 0.2338888888888889,
+    "29": 0.35388888888888886,
+    "33": 0.17222222222222222,
+    "37": 0.25,
+    "41": 0.18888888888888888,
+    "45": 0.17222222222222222
+  },
+  "config_fingerprint": "a4c8271cbd45",
+  "run": "local_only"
+}

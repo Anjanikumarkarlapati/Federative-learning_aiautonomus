@@ -1,0 +1,31 @@
+{
+  "name": "centralized",
+  "accuracy": 0.89889,
+  "final_accuracy": 0.89889,
+  "mAP50": 0.5443,
+  "ade": 0.18772,
+  "fde": 0.33244,
+  "rounds_run": 60,
+  "rounds_to_target": null,
+  "mb_per_round": 0.0,
+  "total_mb": 90.234,
+  "converged": true,
+  "robustness": {
+    "client_acc_mean": 0.82644,
+    "client_acc_std": 0.12636,
+    "client_acc_min": 0.50909,
+    "client_acc_p10": 0.67764,
+    "client_acc_spread": 0.49091
+  },
+  "privacy": {
+    "mode": "none - raw sensor data centralised",
+    "raw_data_egress": true,
+    "raw_data_mb": 90.23
+  },
+  "selection": {
+    "note": "all vehicles, every epoch"
+  },
+  "wall_clock_s": 1143.5,
+  "config_fingerprint": "859294348bd7",
+  "run": "centralized"
+}

@@ -1,9 +1,10 @@
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-runs/
 *.pt
-.pytest_cache/
+*.py[cod]
 .ipynb_checkpoints/
+.pytest_cache/
+.venv/
+__pycache__/
 data/raw/
+runs/
+runs_attrib/
+venv/

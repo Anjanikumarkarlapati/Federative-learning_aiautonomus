@@ -1,0 +1,33 @@
+{
+  "name": "std_fedavg",
+  "accuracy": 0.83,
+  "final_accuracy": 0.83,
+  "mAP50": 0.08922,
+  "ade": 0.19664,
+  "fde": 0.34489,
+  "rounds_run": 60,
+  "rounds_to_target": null,
+  "mb_per_round": 74.561,
+  "total_mb": 4473.658,
+  "converged": true,
+  "robustness": {
+    "client_acc_mean": 0.78539,
+    "client_acc_std": 0.13038,
+    "client_acc_min": 0.46341,
+    "client_acc_p10": 0.61998,
+    "client_acc_spread": 0.53659
+  },
+  "privacy": {
+    "mode": "no DP noise",
+    "raw_data_egress": false,
+    "secure_aggregation": false
+  },
+  "selection": {
+    "clients_never_selected": 0,
+    "selection_gini": 0.5376888888888889,
+    "mean_participation": 18.0
+  },
+  "wall_clock_s": 1956.9,
+  "config_fingerprint": "6ce7acb93704",
+  "run": "std_fedavg"
+}

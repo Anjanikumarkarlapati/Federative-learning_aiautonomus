@@ -1,0 +1,33 @@
+{
+  "name": "proposed_fl",
+  "accuracy": 0.82278,
+  "final_accuracy": 0.82278,
+  "mAP50": 0.0813,
+  "ade": 0.20449,
+  "fde": 0.35954,
+  "rounds_run": 60,
+  "rounds_to_target": null,
+  "mb_per_round": 8.6723,
+  "total_mb": 520.34,
+  "converged": false,
+  "robustness": {
+    "client_acc_mean": 0.76992,
+    "client_acc_std": 0.13827,
+    "client_acc_min": 0.38776,
+    "client_acc_p10": 0.61946,
+    "client_acc_spread": 0.61224
+  },
+  "privacy": {
+    "mode": "no DP noise",
+    "raw_data_egress": false,
+    "secure_aggregation": true
+  },
+  "selection": {
+    "clients_never_selected": 0,
+    "selection_gini": 0.46853333333333325,
+    "mean_participation": 18.0
+  },
+  "wall_clock_s": 1763.3,
+  "config_fingerprint": "67c62ac72d56",
+  "run": "proposed_fl"
+}
