@@ -180,22 +180,22 @@
     },
     "proposed_fl": {
       "name": "proposed_fl",
-      "accuracy": 0.84389,
-      "final_accuracy": 0.84389,
-      "mAP50": 0.08672,
-      "ade": 0.20166,
-      "fde": 0.35448,
+      "accuracy": 0.84667,
+      "final_accuracy": 0.84667,
+      "mAP50": 0.10042,
+      "ade": 0.20174,
+      "fde": 0.35464,
       "rounds_run": 60,
       "rounds_to_target": null,
-      "mb_per_round": 8.7288,
-      "total_mb": 523.726,
+      "mb_per_round": 8.7221,
+      "total_mb": 523.327,
       "converged": false,
       "robustness": {
-        "client_acc_mean": 0.7943,
-        "client_acc_std": 0.13018,
-        "client_acc_min": 0.36735,
-        "client_acc_p10": 0.66,
-        "client_acc_spread": 0.63265
+        "client_acc_mean": 0.79369,
+        "client_acc_std": 0.1369,
+        "client_acc_min": 0.32653,
+        "client_acc_p10": 0.63098,
+        "client_acc_spread": 0.67347
       },
       "privacy": {
         "mode": "no DP noise",
@@ -207,13 +207,13 @@
         "selection_gini": 0.46853333333333325,
         "mean_participation": 18.0
       },
-      "wall_clock_s": 2569.2
+      "wall_clock_s": 3794.7
     }
   },
   "acceptance": {
     "accuracy_target": {
       "requirement": "accuracy >= 90.00%",
-      "observed": 0.8439,
+      "observed": 0.8467,
       "pass": false
     },
     "convergence_speedup": {
@@ -225,21 +225,21 @@
     },
     "communication_saving": {
       "requirement": "MB/round cut by >= 30% vs standard FedAvg",
-      "proposed_mb": 8.7288,
+      "proposed_mb": 8.7221,
       "fedavg_mb": 74.561,
-      "reduction": 0.8829,
+      "reduction": 0.883,
       "pass": true
     },
     "communication_budget": {
       "requirement": "MB/round <= 9.0",
-      "observed": 8.7288,
+      "observed": 8.7221,
       "pass": true
     },
     "non_iid_robustness": {
       "requirement": "cross-client accuracy dispersion <= standard FedAvg",
-      "proposed_std": 0.13018,
+      "proposed_std": 0.1369,
       "fedavg_std": 0.13038,
-      "pass": true
+      "pass": false
     },
     "convergence_speedup_relative": {
       "requirement": "rounds to 95% of the centralized ceiling, cut by >= 25%",
@@ -252,8 +252,8 @@
     "accuracy_vs_ceiling": {
       "requirement": "proposed accuracy >= 95% of the centralized ceiling",
       "centralized": 0.8989,
-      "proposed": 0.8439,
-      "ratio": 0.9388,
+      "proposed": 0.8467,
+      "ratio": 0.9419,
       "pass": false
     },
     "privacy": {

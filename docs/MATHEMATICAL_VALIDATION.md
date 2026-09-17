@@ -309,10 +309,10 @@ a near-zero weight.
 | Quantity | Value |
 |---|---|
 | Centralized (upper bound), best round | 89.89% |
-| Proposed FL, best round | 84.39% |
+| Proposed FL, best round | 84.67% |
 | Standard FedAvg, best round | 83.00% |
 | Local-only, fleet mean | 25.19% |
-| Collaboration gain over local-only | 59.2 points |
+| Collaboration gain over local-only | 59.5 points |
 
 ---
 
@@ -348,9 +348,9 @@ FR-07 stops training when `‖w(r+1) − w(r)‖₂ ≤ ε`.
 | Quantity | Value |
 |---|---|
 | Stopping tolerance ε | 0.0010 |
-| proposed_fl: first round ‖Δw‖ | 0.5573 |
+| proposed_fl: first round ‖Δw‖ | 0.5575 |
 | std_fedavg: first round ‖Δw‖ | 0.6913 |
-| proposed_fl: final round ‖Δw‖ | 0.0253 |
+| proposed_fl: final round ‖Δw‖ | 0.0255 |
 | std_fedavg: final round ‖Δw‖ | 0 (exact) |
 
 Two things worth reading off this plot. The decay is not monotone - client sampling makes
@@ -369,7 +369,7 @@ should stop at `R_max − 1` and save the round.
 | Quantity | Value |
 |---|---|
 | Standard FedAvg | 83.00% at 74.56 MB/round |
-| Proposed FL | 84.39% at 8.73 MB/round |
+| Proposed FL | 84.67% at 8.72 MB/round |
 
 ---
 

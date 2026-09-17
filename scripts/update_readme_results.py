@@ -16,11 +16,24 @@ MARKER = "<!-- RESULTS -->"
 
 
 def _history(arm: str, runs_dir: str) -> list:
-    path = os.path.join(runs_dir, arm, "rounds.jsonl")
-    if not os.path.exists(path):
+    """Per-round records, from rounds.jsonl if present else the committed CSV."""
+    jsonl = os.path.join(runs_dir, arm, "rounds.jsonl")
+    if os.path.exists(jsonl):
+        with open(jsonl, encoding="utf-8") as fh:
+            return [json.loads(line) for line in fh if line.strip()]
+    csv_path = os.path.join(runs_dir, arm, "rounds.csv")
+    if not os.path.exists(csv_path):
         return []
-    with open(path, encoding="utf-8") as fh:
-        return [json.loads(line) for line in fh if line.strip()]
+    import csv as _csv
+    with open(csv_path, newline="", encoding="utf-8") as fh:
+        rows = []
+        for row in _csv.DictReader(fh):
+            if not row.get("accuracy"):
+                continue
+            rows.append({k: (float(v) if k != "round" and v not in ("", None)
+                             else (int(v) if k == "round" and v else v))
+                         for k, v in row.items()})
+        return rows
 
 
 def render(report: dict, runs_dir: str = "runs") -> str:
