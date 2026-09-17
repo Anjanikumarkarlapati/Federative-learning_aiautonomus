@@ -286,3 +286,51 @@ def test_dp_run_stays_within_the_privacy_budget():
     result = SimRunner(cfg, echo=False).run()
     assert result.privacy["epsilon_spent"] <= result.privacy["epsilon_budget"] + 1e-6
     assert result.privacy["noise_multiplier"] > 0
+
+
+def test_secure_aggregation_survives_realistic_update_magnitudes():
+    """The mask must cancel against *small* updates, not just against zeros.
+
+    The original mask scale was fixed at 1.0 while converged updates have norm
+    ~0.01, making the sum a 10^4 : 1 cancellation that lost more digits than
+    float32 has. The zeros-reference mask test passed throughout, so this case -
+    a realistic weighted sum, checked on relative error - is the one that catches
+    it, and it failed in 56 of 60 rounds of a shipped run before the fix.
+    """
+    from fedav.data.quality import aggregation_weights
+    from fedav.utils.tensors import state_norm, state_sub, weighted_average
+
+    for num_clients, update_norm in ((8, 0.5), (32, 0.01), (64, 0.002)):
+        torch.manual_seed(num_clients)
+        deltas = [OrderedDict(w=torch.randn(512) * update_norm / 22.6)
+                  for _ in range(num_clients)]
+        alphas = aggregation_weights([100] * num_clients)
+        expected = weighted_average(deltas, alphas.tolist())
+        scale = SecureAggregationMasks.scale_for(state_norm(expected), 512)
+        masks = SecureAggregationMasks(round_id=1, participants=list(range(num_clients)),
+                                       scale=scale)
+        total = OrderedDict(w=torch.zeros(512, dtype=torch.float64))
+        for i, alpha in enumerate(alphas):
+            masked = masks.apply({k: v * float(alpha) for k, v in deltas[i].items()}, i)
+            total["w"] += masked["w"]
+        recovered = OrderedDict(w=total["w"].to(torch.float32))
+        relative = state_norm(state_sub(recovered, expected)) / state_norm(expected)
+        assert relative < 1e-3, f"{num_clients} clients, norm {update_norm}: {relative:.2e}"
+
+        # ...and the mask must still be large enough to hide one client's share
+        share = {k: v * float(alphas[0]) for k, v in deltas[0].items()}
+        mask_norm = float(torch.linalg.norm(masks.mask_for(0, deltas[0])["w"]))
+        assert mask_norm > 5 * state_norm(share)
+
+
+def test_every_round_of_a_run_verifies_secure_aggregation():
+    """Regression for the shipped run where 56 of 60 rounds silently failed."""
+    from fedav.sim.runner import SimRunner
+
+    cfg = tiny_config(name="secure_rounds", num_clients=10,
+                      train={"rounds": 4, "local_epochs": 1},
+                      selection={"fraction": 0.6})
+    result = SimRunner(cfg, echo=False).run()
+    verified = [r.get("secure_aggregation_verified") for r in result.history
+                if r.get("clients_reported")]
+    assert verified and all(verified), f"rounds failing verification: {verified}"

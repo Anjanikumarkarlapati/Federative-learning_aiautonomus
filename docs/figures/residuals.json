@@ -1,0 +1,175 @@
+{
+  "simplex_invariant": {
+    "draws": 4000,
+    "max_abs_residual": 5.551115123125783e-16,
+    "machine_epsilon": 2.220446049250313e-16,
+    "verdict": "exact to machine precision"
+  },
+  "quality_weighting": {
+    "q_k": [
+      0.95,
+      0.92,
+      0.95,
+      0.2,
+      0.6314
+    ],
+    "alpha_size_weighted": [
+      0.0476,
+      0.119,
+      0.3571,
+      0.3571,
+      0.119
+    ],
+    "alpha_quality_aware": [
+      0.0706,
+      0.171,
+      0.5296,
+      0.1115,
+      0.1173
+    ],
+    "degraded_large_share_before": 0.3571,
+    "degraded_large_share_after": 0.1115,
+    "verdict": "degraded shard down-weighted"
+  },
+  "fednova_normalisation": {
+    "tau_range": [
+      1,
+      12
+    ],
+    "max_abs_error_normalised_vs_reference": 0.0,
+    "max_abs_error_plain_vs_reference": 8.25,
+    "verdict": "normalised matches the reference; plain diverges with tau"
+  },
+  "dp_composition": {
+    "budget_epsilon": 8.0,
+    "delta": 1e-05,
+    "sampling_rate": 0.3,
+    "rounds": 60,
+    "calibrated_noise_multiplier": 1.7482,
+    "epsilon_spent_at_calibrated_z": 7.9963,
+    "verdict": "inside budget"
+  },
+  "analytic_gaussian": {
+    "delta": 1e-05,
+    "sigma_analytic_at_eps1": 3.7306,
+    "sigma_classical_at_eps1": 4.8448,
+    "analytic_tighter_everywhere": true,
+    "verdict": "analytic never looser"
+  },
+  "secure_aggregation": {
+    "participant_counts": [
+      4,
+      8,
+      16,
+      32,
+      64
+    ],
+    "converged_update_norm": 0.01,
+    "max_relative_error": {
+      "float32, mask scale 1.0": 0.18162015641422405,
+      "float32, scale matched": 0.0006757198872376165,
+      "float64, scale matched": 1.3485986741896338e-07
+    },
+    "min_mask_to_signal_ratio": 56.691845237383696,
+    "runner_verification_tolerance": 0.001,
+    "note": "float32 accumulation is the dominant cause: each client sums its pair masks in a different order and float32 addition is not associative",
+    "verdict": "shipped path cancels ~4 decades inside tolerance while each update stays hidden"
+  },
+  "error_feedback": {
+    "update_norm": 45.7017,
+    "relative_error_at_round_60": {
+      "0.1": 0.06845,
+      "0.25": 0.02239,
+      "0.5": 0.00912
+    },
+    "residual_bound_respected": {
+      "0.1": true,
+      "0.25": true,
+      "0.5": true
+    },
+    "verdict": "relative error decays ~1/T and the residual stays inside ((1-\u03b4)/\u03b4)||u||"
+  },
+  "communication_stack": {
+    "model_parameters": 700485,
+    "clients_per_round": 15,
+    "stage_mb_per_round": {
+      "raw fp32 weights unicast": 80.164,
+      "+ gzip": 74.347,
+      "+ float16": 37.05,
+      "+ top-25% sparsity": 25.248,
+      "+ RSU multicast": 7.958
+    },
+    "total_reduction": 0.9007,
+    "budget_mb": 9.0,
+    "inside_budget": true,
+    "verdict": "inside the 9 MB/round budget"
+  },
+  "byzantine_robustness": {
+    "attack": "sign-flip x6",
+    "clients": 20,
+    "max_error_plain_mean": 2.8,
+    "max_error_norm_filter_plus_trimmed_mean": 0.0,
+    "verdict": "robust path bounded, plain path diverges"
+  },
+  "quality_metric": {
+    "hellinger_identical": 0.0,
+    "hellinger_disjoint": 1.0,
+    "q_range_clean_sensor": [
+      0.4203,
+      0.95
+    ],
+    "q_range_degraded_sensor": [
+      0.1106,
+      0.25
+    ],
+    "verdict": "H metric bounded in [0,1]; q_k monotone in both factors"
+  },
+  "learning_curves": {
+    "final_round_pct": {
+      "centralized": 88.17,
+      "proposed_fl": 82.67,
+      "std_fedavg": 80.67,
+      "local_only": 25.19
+    },
+    "best_round_pct": {
+      "centralized": 89.89,
+      "proposed_fl": 84.39,
+      "std_fedavg": 83.0
+    },
+    "collaboration_gain_pts": 59.2
+  },
+  "ablation": {
+    "fedavg_control_accuracy": 70.78,
+    "delta_points": {
+      "Connectivity / trajectory selection": 8.22,
+      "Server momentum": 4.22,
+      "Quality-aware weighting": 2.0,
+      "Adaptive local epochs (FR-10)": -12.17
+    },
+    "verdict": "three ingredients help, adaptive epochs harms"
+  },
+  "convergence_criterion": {
+    "tolerance": 0.001,
+    "per_arm": {
+      "proposed_fl": {
+        "first": 0.55725,
+        "last": 0.02533
+      },
+      "std_fedavg": {
+        "first": 0.69131,
+        "last": 0.0
+      }
+    },
+    "verdict": "monotone decay toward the tolerance; neither arm tripped it inside R_max"
+  },
+  "cost_of_accuracy": {
+    "Standard FedAvg": {
+      "mb_per_round": 74.561,
+      "accuracy_pct": 83.0
+    },
+    "Proposed FL": {
+      "mb_per_round": 8.729,
+      "accuracy_pct": 84.39
+    }
+  }
+}

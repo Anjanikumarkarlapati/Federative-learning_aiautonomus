@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from collections import OrderedDict
 
 from ..client.compression import BandwidthController, TopKCompressor
 from ..client.serializer import ChecksumError, UpdateSerializer
@@ -45,8 +46,8 @@ from ..server.secure import SecureAggregationMasks, SecureChannel
 from ..server.selection import ClientSelector
 from ..utils.seeding import rng as make_rng, seed_everything
 from ..utils.tensors import (StateDict, clone_state, state_add, state_norm,
-                             state_sub, state_zeros_like, to_float_state,
-                             weighted_average)
+                             state_numel, state_sub, state_zeros_like,
+                             to_float_state, weighted_average)
 
 
 @dataclass
@@ -115,6 +116,7 @@ class SimRunner:
         self.logger = logger or MetricsLogger(cfg.name, cfg.out_dir,
                                               cfg.fingerprint(), echo=echo)
         self._last_sync: Dict[int, int] = {}      # client -> round whose model it holds
+        self._mask_scale = 1e-2                   # matched to the update magnitude
         self.accountant: Optional[PrivacyAccountant] = None
         if cfg.dp.enabled:
             sampling_rate = min(1.0, cfg.selection.fraction)
@@ -208,19 +210,35 @@ class SimRunner:
         Each vehicle uploads ``alpha_k dW_k + mask_k``; the pairwise masks cancel
         in the sum, so the server recovers ``sum_k alpha_k dW_k`` exactly and
         nothing about any individual ``dW_k``.
+
+        The mask magnitude is set from the round's own reported update norms -
+        already part of the PRD 8.6 message schema, and already exchanged in the
+        first phase that establishes the ``alpha`` normaliser, so this costs no
+        extra round trip and reveals no individual update beyond the scalar norm
+        the protocol already carries. Scale-matching is not cosmetic: a mask fixed
+        at 1.0 against a converged update of norm 0.01 is a 10^4 : 1 cancellation
+        that blows past the verification tolerance (it did, in 56 of 60 rounds,
+        before this was fixed).
         """
         participants = [u.client_id for u in updates]
+        expected = weighted_average([u.delta for u in updates], alphas.tolist())
+        scale = SecureAggregationMasks.scale_for(
+            float(np.dot(alphas, [state_norm(u.delta) for u in updates])),
+            state_numel(expected),
+        )
+        self._mask_scale = scale
         masks = SecureAggregationMasks(round_id=round_id, participants=participants,
-                                       secret=self.cfg.seed, scale=1.0)
-        total = state_zeros_like(updates[0].delta)
+                                       secret=self.cfg.seed, scale=scale)
+        total = OrderedDict((k, torch.zeros(v.shape, dtype=torch.float64))
+                            for k, v in expected.items())
         for update, alpha in zip(updates, alphas):
             masked = masks.apply({k: v * float(alpha) for k, v in update.delta.items()},
                                  update.client_id)
             for key in total:
                 total[key] += masked[key]
-        expected = weighted_average([u.delta for u in updates], alphas.tolist())
-        residual = state_norm(state_sub(total, expected))
-        return total, bool(residual <= 1e-3 * max(state_norm(expected), 1e-6) + 1e-4)
+        recovered = OrderedDict((k, v.to(torch.float32)) for k, v in total.items())
+        residual = state_norm(state_sub(recovered, expected))
+        return recovered, bool(residual <= 1e-3 * max(state_norm(expected), 1e-12))
 
     # -------------------------------------------------------------------- run
     def run(self) -> RunResult:
