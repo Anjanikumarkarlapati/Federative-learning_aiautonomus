@@ -1,0 +1,8 @@
+arm,acc_mean,acc_std,worst_vehicle_acc,rounds_to_90pct,uploaded_kb,dropped_uploads
+centralized,0.7150,0.0000,0.2656,1.0,0.000,0.0
+fedavg,0.6110,0.0000,0.1860,2.0,4.032,9.0
++selection,0.6660,0.0000,0.3043,2.0,4.992,4.0
++quality,0.6120,0.0000,0.1977,2.0,4.032,9.0
+proposed,0.6710,0.0000,0.3043,2.0,4.992,4.0
+proposed+topk,0.6740,0.0000,0.2754,2.0,3.756,4.0
+proposed+dp,0.5270,0.0000,0.1992,2.0,4.416,7.0
