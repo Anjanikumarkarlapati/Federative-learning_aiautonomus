@@ -117,3 +117,22 @@ def test_standard_fedavg_baseline_is_plain_fedavg():
     agg = fedavg_config(default_config()).aggregation
     assert not agg.quality_aware and agg.server_momentum == 0.0
     assert agg.normalize_local_steps is False
+
+
+def test_arm_result_does_not_depend_on_earlier_arms(tmp_path):
+    """The benchmark shares one fleet across arms; each arm must see the same
+    augmentation stream whatever ran before it."""
+    from fedav.config import default_config
+    from fedav.data.federated import build_fleet
+    from fedav.sim.runner import run_experiment
+
+    cfg = default_config().merged({
+        "num_clients": 4, "out_dir": str(tmp_path),
+        "data": {"samples_per_client": 40, "global_test_size": 96},
+        "train": {"rounds": 1, "local_epochs": 1}, "selection": {"fraction": 1.0},
+    })
+    fleet = build_fleet(cfg)
+    first = run_experiment(cfg.merged({"name": "a"}), fleet, echo=False).history[0]
+    second = run_experiment(cfg.merged({"name": "b"}), fleet, echo=False).history[0]
+    for key in ("accuracy", "loss", "delta_norm"):
+        assert first[key] == second[key]

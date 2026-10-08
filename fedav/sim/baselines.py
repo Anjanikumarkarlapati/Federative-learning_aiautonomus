@@ -151,6 +151,7 @@ def run_local_only(cfg: FLConfig, fleet: Fleet, epochs: Optional[int] = None,
     logger = MetricsLogger(cfg.name, cfg.out_dir, cfg.fingerprint(), echo=echo)
     logger.write_config(cfg.to_dict())
     write_vehicle_profiles(logger.run_dir, fleet)
+    fleet.reset_augmentation()                   # independent of earlier arms
     epochs = epochs or max(1, cfg.train.rounds * cfg.train.local_epochs // 4)
     test_loader = fleet.test_loader()
 

@@ -34,7 +34,12 @@ class SceneDataset(Dataset):
         self.boxes = torch.from_numpy(np.ascontiguousarray(arrays["boxes"]))
         self.trajectories = torch.from_numpy(np.ascontiguousarray(arrays["trajectories"]))
         self.augment = augment
-        self._gen = torch.Generator().manual_seed(int(seed))
+        self._seed = int(seed)
+        self._gen = torch.Generator().manual_seed(self._seed)
+
+    def reset_augmentation(self) -> None:
+        """Rewind the augmentation stream to its construction seed."""
+        self._gen.manual_seed(self._seed)
 
     def __len__(self) -> int:
         return int(self.images.shape[0])
@@ -122,6 +127,16 @@ class Fleet:
     @property
     def profiles(self) -> List[VehicleProfile]:
         return [v.profile for v in self.vehicles]
+
+    def reset_augmentation(self) -> None:
+        """Rewind every vehicle's augmentation stream.
+
+        The fleet is shared across benchmark arms, and each training set draws
+        its flips/jitter from a stateful generator - without a rewind, an arm's
+        result depends on which arms ran before it on the same fleet.
+        """
+        for vehicle in self.vehicles:
+            vehicle.train.reset_augmentation()
 
     @property
     def total_samples(self) -> int:

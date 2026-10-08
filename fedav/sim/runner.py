@@ -263,6 +263,7 @@ class SimRunner:
     def run(self) -> RunResult:
         cfg = self.cfg
         started = time.perf_counter()
+        self.fleet.reset_augmentation()          # independent of earlier arms
         self.logger.write_config(cfg.to_dict())
         write_vehicle_profiles(self.logger.run_dir, self.fleet)
         previous_broadcast: Optional[StateDict] = None
