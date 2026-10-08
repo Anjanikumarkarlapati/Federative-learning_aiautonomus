@@ -614,8 +614,9 @@ Stated plainly, because a simulation that overstates itself is worse than no sim
 5. **One knowing deviation from the PRD.** FR-10 (adaptive local epochs) ships disabled because
    it measurably hurts — see section 9. It is implemented, configurable and tested, so enabling it
    is a one-line config change; the default reflects the evidence, not the spec.
-6. **Averaged robustness is not tail robustness.** The proposed arm improves cross-client
-   dispersion but leaves the worst-served vehicle 9.6 points worse off. For a safety-relevant
+6. **Averaged robustness is not tail robustness.** The proposed arm raises mean accuracy but
+   widens cross-client dispersion (0.1369 vs 0.1304) and leaves the worst-served vehicle 13.6
+   points worse off than standard FedAvg. For a safety-relevant
    system that trade may be unacceptable; `aggregation.q_min` bounds it.
 7. **Simulation only.** `v1` is explicitly not an on-vehicle deployment (PRD 3.2).
 8. **Roadmap** (PRD 20): certified DP budgets, blockchain contribution auditing, 5G/V2X
