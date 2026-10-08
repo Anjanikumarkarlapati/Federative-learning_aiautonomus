@@ -46,7 +46,7 @@
 \maketitle
 
 \begin{abstract}
-Connected autonomous vehicles (CAVs) collect perception data that cannot be pooled centrally for reasons of privacy, bandwidth and regulation. We study FL-AV, a federated-learning framework in which a fleet of vehicles jointly trains one multi-task perception model (classification, box localisation and trajectory prediction; 0.70\,M parameters) while only model deltas cross the vehicle-to-infrastructure (V2I) link to a road-side unit (RSU). FL-AV combines quality-aware aggregation, connectivity- and trajectory-aware client selection, a compressed transport stack (deltas, float16, gzip, top-$k$ sparsification with error feedback, multicast) and optional secure aggregation and differential privacy. On a simulated 50-vehicle fleet with strongly non-IID data (Dirichlet $\alpha=0.4$) and a single random seed, federation lifts accuracy from 24.7\% (local-only) to 82.9\% (mean of the last ten rounds), 94\% of a centralized upper bound, with no raw sensor sample leaving a vehicle. Relative to an uncompressed unicast FedAvg baseline, the transport stack cuts measured traffic by 88.3\% (74.6 to 8.7\,MB per round), about 82\% of which comes from lower precision and multicast rather than sparsification. A controlled single-mechanism ablation shows that three of four algorithmic mechanisms help, whereas adaptive local epochs lower accuracy by 12.2 points through objective inconsistency. The framework did not converge faster, the worst-served vehicle fell from 46.3\% to 32.7\%, and detection mAP@0.5 remains low (0.10 versus 0.54 centralized). An audit of the implementation conducted for this paper found defects that qualify the comparison against FedAvg; we state which conclusions survive. All results come from one synthetic dataset and one seed and should be read as relative orderings rather than absolute performance.
+Connected autonomous vehicles (CAVs) collect perception data that cannot be pooled centrally for reasons of privacy, bandwidth and regulation. We study FL-AV, a federated-learning framework in which a fleet of vehicles jointly trains one multi-task perception model (classification, box localisation and trajectory prediction; 0.70\,M parameters) while only model deltas cross the vehicle-to-infrastructure (V2I) link to a road-side unit (RSU). FL-AV combines quality-aware aggregation, link-aware client selection and a compressed transport stack. On a simulated 50-vehicle fleet with strongly non-IID data (Dirichlet $\alpha=0.4$) and a single random seed, federation lifts accuracy from 24.7\% (local-only) to 82.9\% (mean of the last ten rounds), 94\% of a centralized upper bound, with no raw sensor sample leaving a vehicle. Relative to an uncompressed unicast FedAvg baseline, the transport stack cuts measured traffic by 88.3\% (74.6 to 8.7\,MB per round), about 82\% of which comes from lower precision and multicast rather than sparsification. A controlled single-mechanism ablation shows that three of four algorithmic mechanisms help, whereas adaptive local epochs lower accuracy by 12.2 points through objective inconsistency. The framework did not converge faster, the worst-served vehicle fell from 46.3\% to 32.7\%, and detection mAP@0.5 remains low (0.10 versus 0.54 centralized). An audit of the implementation conducted for this paper found defects that qualify the comparison against FedAvg; we state which conclusions survive. All results come from one synthetic dataset and one seed and should be read as relative orderings rather than absolute performance.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -71,16 +71,16 @@ We do not claim state-of-the-art accuracy on a public benchmark (the data are sy
 
 % =====================================================================
 \section{Related Work}\label{sec:related}
-\subsubsection*{Federated optimisation under heterogeneity}
+\subsection{Federated optimisation under heterogeneity}
 FedAvg~\cite{mcmahan2017fedavg} averages local SGD results. FedProx~\cite{li2020fedprox} adds a proximal term to limit client drift, SCAFFOLD~\cite{karimireddy2020scaffold} corrects drift with control variates, and FedOpt~\cite{reddi2021fedopt} applies adaptive optimisers on the server. Hsu \emph{et al.}~\cite{hsu2019noniid} study label skew with Dirichlet partitions and show that server momentum helps; Hsieh \emph{et al.}~\cite{hsieh2020quagmire} and Li \emph{et al.}~\cite{li2022niidbench} document how non-IID data degrade accuracy across settings. FedNova~\cite{wang2020fednova} shows that unequal numbers of local steps make plain averaging optimise a mismatched surrogate objective and proposes normalised averaging, which we adopt unchanged.
 
-\subsubsection*{Communication efficiency}
+\subsection{Communication efficiency}
 Kone\v{c}n\'y \emph{et al.}~\cite{konecny2016strategies} introduced structured and sketched updates for FL. Sparsification with memory~\cite{stich2018sparsified}, deep gradient compression~\cite{lin2018dgc} and the analysis of error feedback~\cite{karimireddy2019ef} show that dropping small coordinates is safe if the dropped mass is accumulated and re-sent; Sattler \emph{et al.}~\cite{sattler2020robust} combine sparsification with ternarisation for non-IID FL. We use top-$k$ with error feedback and add the surrounding engineering: deltas, float16, gzip, RSU multicast and a closed-loop byte-budget controller.
 
-\subsubsection*{Privacy}
+\subsection{Privacy}
 Secure aggregation~\cite{bonawitz2017secagg} lets a server learn only the sum of masked client updates; differential privacy (DP)~\cite{abadi2016dpsgd} bounds what that sum reveals about any one client; R\'enyi accounting of the subsampled Gaussian mechanism~\cite{mironov2017rdp,mironov2019sgm} and the analytic Gaussian mechanism~\cite{balle2018analytic} give tight budgets. Gradient inversion~\cite{zhu2019dlg} motivates withholding individual updates.
 
-\subsubsection*{Client selection, robustness and vehicular FL}
+\subsection{Client selection, robustness and vehicular FL}
 Resource-aware~\cite{nishio2019fedcs} and utility-guided~\cite{lai2021oort} selection reduce wasted rounds; Byzantine-robust aggregation~\cite{yin2018byzantine} bounds the damage of poisoned updates. A recent survey~\cite{chellapandi2023cav} identifies privacy, heterogeneity and communication as the open challenges of FL for connected and automated vehicles. To our knowledge, evaluations in this setting rarely report negative ablation results or tail-client metrics, which is the gap this evaluation targets.
 
 % =====================================================================
@@ -451,7 +451,7 @@ Cryptographic security; DP guarantee; DP and Byzantine results in training & -- 
 \end{table*}
 
 \section{Hyperparameters}\label{app:hyper}
-\begin{table}[!h]
+\begin{table}[!t]
 \renewcommand{\arraystretch}{1.05}
 \caption{Hyperparameters of All Federated Arms}
 \label{tab:hyper}
