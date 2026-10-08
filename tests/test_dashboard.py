@@ -52,3 +52,59 @@ def test_build_run_command_matches_cli():
                                  {"train.rounds": 3, "dp.enabled": True})
     assert cmd[1:4] == ["-m", "fedav.cli", "run"]
     assert cmd[-2:] == ["train.rounds=3", "dp.enabled=true"]
+
+
+# ------------------------------------------------------------ per-vehicle telemetry
+
+@pytest.fixture(scope="module")
+def tiny_run(tmp_path_factory):
+    from fedav.config import default_config
+    from fedav.sim.runner import run_experiment
+
+    out = tmp_path_factory.mktemp("runs")
+    cfg = default_config().merged({
+        "name": "tiny", "num_clients": 6, "out_dir": str(out),
+        "data": {"samples_per_client": 40, "global_test_size": 96, "image_size": 32},
+        "train": {"rounds": 2, "local_epochs": 1},
+        "selection": {"fraction": 0.5},
+    })
+    run_experiment(cfg, echo=False)
+    return os.path.join(str(out), "tiny"), cfg
+
+
+def test_runner_writes_every_vehicle_every_round(tiny_run):
+    run_dir, cfg = tiny_run
+    rounds = data.load_vehicle_rounds(run_dir)
+    assert len(rounds) == 2 * cfg.num_clients                   # every car, every round
+    assert set(rounds["status"]) <= set(data.VEHICLE_STATUSES)
+    reported = rounds[rounds["status"] == "reported"]
+    assert reported["alpha"].notna().all()
+    # aggregation weights of each round's contributors sum to 1
+    assert reported.groupby("round")["alpha"].sum().round(4).eq(1.0).all()
+    # per-round "clients_reported" agrees with the per-vehicle records
+    agg = data.load_rounds(run_dir).set_index("round")["clients_reported"]
+    assert reported.groupby("round").size().reindex(agg.index, fill_value=0).equals(agg)
+
+
+def test_fleet_table_is_complete_and_consistent(tiny_run):
+    run_dir, cfg = tiny_run
+    table = data.fleet_table(run_dir)
+    assert sorted(table["client_id"]) == list(range(cfg.num_clients))
+    assert table["final_accuracy"].between(0, 1).all()
+    shares = table.filter(like="share_").sum(axis=1)
+    assert shares.round(3).eq(1.0).all()
+    rounds = data.load_vehicle_rounds(run_dir)
+    live = data.participation_from_rounds(rounds).set_index("client_id")
+    final = table.set_index("client_id")
+    assert (live["times_reported"] == final["times_reported"]).all()
+
+
+def test_profiles_rebuilt_from_config_match_written_ones(tiny_run):
+    run_dir, _ = tiny_run
+    written = data.load_vehicle_profiles(run_dir)
+    os.rename(os.path.join(run_dir, "vehicles.json"), os.path.join(run_dir, "v.bak"))
+    try:
+        rebuilt = data.load_vehicle_profiles(run_dir)
+    finally:
+        os.rename(os.path.join(run_dir, "v.bak"), os.path.join(run_dir, "vehicles.json"))
+    pd.testing.assert_frame_equal(written, rebuilt)

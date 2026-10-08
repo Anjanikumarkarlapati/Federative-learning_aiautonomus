@@ -5,6 +5,7 @@
 Pages
 -----
 Overview        headline numbers + PRD 12.3 acceptance
+Fleet           every vehicle: profile, participation, per-car accuracy
 Benchmark       the four arms of PRD 12.2, round by round
 Ablation        which enhancement does the work
 Launch a run    configure, start and watch a federated run live
@@ -278,6 +279,11 @@ def live_panel(job: dict) -> None:
         st.caption("Waiting for the first round (building the fleet and model)…")
         return
     run_charts(df)
+    vr = data.load_vehicle_rounds(run_dir)
+    if not vr.empty:
+        participation_heatmap(vr)
+        if code is not None:
+            st.caption("Full per-vehicle view: **Fleet (every vehicle)** page.")
     if code == 0:
         summary = data.load_summary(run_dir)
         if summary:
@@ -352,8 +358,358 @@ def page_validation() -> None:
             st.image(path, caption=title.capitalize(), width="stretch")
 
 
+# ------------------------------------------------------------------ fleet / cars
+
+REGION_COLORS = {"urban": "#2a78d6", "highway": "#eb6834", "rural": "#1baf7a"}
+STATUS_STYLE = {   # status palette: reserved colours, always shown with a label
+    "reported": ("#1baf7a", "✅ reported"),
+    "not_selected": ("#d9d8d4", "· not selected"),
+    "dropped": ("#e34948", "❌ dropped (link lost)"),
+    "straggler": ("#eda100", "⏱ straggler (timed out)"),
+    "corrupt": ("#eb6834", "⚠ corrupt payload"),
+    "rejected": ("#4a3aa7", "🛡 rejected (Byzantine filter)"),
+}
+
+
+def _mtime(run_dir: str) -> float:
+    paths = [os.path.join(run_dir, f) for f in
+             ("vehicles.json", "vehicle_rounds.jsonl", "vehicle_summary.json", "config.json")]
+    return max((os.path.getmtime(p) for p in paths if os.path.exists(p)), default=0.0)
+
+
+@st.cache_data(show_spinner="Loading fleet…")
+def cached_fleet(run_dir: str, _stamp: float):
+    return data.fleet_table(run_dir), data.load_vehicle_rounds(run_dir)
+
+
+def fleet_runs() -> List[data.RunInfo]:
+    runs = [r for r in data.discover_runs() if data.has_vehicle_data(r.path)]
+    def key(r):  # federated runs with per-round vehicle telemetry first
+        has_rounds = os.path.exists(os.path.join(r.path, "vehicle_rounds.jsonl"))
+        return (not has_rounds, not r.name.endswith("proposed_fl"), r.source != "live", r.name)
+    return sorted(runs, key=key)
+
+
+def page_fleet() -> None:
+    st.title("Fleet — every vehicle")
+    st.caption("Who each car is, what it contributed every round, and how well the shared "
+               "model serves it on its own held-out data.")
+    runs = fleet_runs()
+    if not runs:
+        st.info("No runs found. Launch one from **Launch a run**.")
+        return
+    labels = {f"{'🟢' if r.source == 'live' else '📦'} {r.name}": r for r in runs}
+    run = labels[st.selectbox("Run", list(labels))]
+    fleet_view(run.path, key=run.name)
+
+
+def fleet_view(run_dir: str, key: str = "fleet", compact: bool = False) -> None:
+    table, rounds = cached_fleet(run_dir, _mtime(run_dir))
+    if table.empty:
+        st.warning("No vehicle data for this run.")
+        return
+    if not os.path.exists(os.path.join(run_dir, "vehicles.json")):
+        st.caption("ℹ️ Profiles rebuilt exactly from this run's config.json (the fleet is "
+                   "deterministic in config + seed). Per-vehicle performance needs a run made "
+                   "with the per-vehicle telemetry.")
+    acc_col = "final_accuracy" if "final_accuracy" in table else (
+        "latest_accuracy" if "latest_accuracy" in table else None)
+
+    # ---- headline
+    c = st.columns(6)
+    c[0].metric("Vehicles", len(table))
+    c[1].metric("Training samples", f"{int(table['n_train'].sum()):,}")
+    c[2].metric("Uncalibrated sensors", int((~table["calibrated"]).sum()))
+    if "times_reported" in table:
+        c[3].metric("Never contributed", int((table["times_reported"].fillna(0) == 0).sum()))
+    if acc_col:
+        acc = table[acc_col].dropna()
+        c[4].metric("Mean vehicle accuracy", f"{100 * acc.mean():.1f}%")
+        worst = table.loc[table[acc_col].idxmin()]
+        c[5].metric("Worst-served vehicle", f"{100 * worst[acc_col]:.1f}%",
+                    f"car #{int(worst['client_id'])} · {worst['region']}/{worst['weather']}",
+                    delta_color="off", delta_arrow="off")
+    if acc_col and "n_test" in table:
+        which = "the best global checkpoint"
+        g = data.load_rounds(run_dir)
+        if acc_col == "final_accuracy" and "accuracy" in g and not g.empty:
+            which += f" (round {int(g.loc[g['accuracy'].idxmax(), 'round'])})"
+        elif acc_col == "latest_accuracy":
+            which = "the latest global model (run in progress)"
+        st.caption(f"Per-vehicle accuracy = {which} on each car's own test split "
+                   f"({int(table['n_test'].min())}–{int(table['n_test'].max())} samples), "
+                   "so single-car numbers carry sampling noise of several points.")
+
+    tabs = st.tabs(["All vehicles", "Vehicle detail", "Rounds × vehicles",
+                    "By region & weather", "Across methods"])
+
+    # ---- table
+    with tabs[0]:
+        f1, f2, f3 = st.columns(3)
+        regions = f1.multiselect("Region", sorted(table["region"].unique()), key=f"{key}_reg")
+        weathers = f2.multiselect("Weather", sorted(table["weather"].unique()), key=f"{key}_wx")
+        calib = f3.selectbox("Sensor calibration", ["all", "calibrated", "uncalibrated"],
+                             key=f"{key}_cal")
+        view = table
+        if regions:
+            view = view[view["region"].isin(regions)]
+        if weathers:
+            view = view[view["weather"].isin(weathers)]
+        if calib != "all":
+            view = view[view["calibrated"] == (calib == "calibrated")]
+        show_cols = [c for c in [
+            "client_id", "region", "weather", acc_col, "rank", "calibrated", "byzantine",
+            "n_train", "n_test",
+            "link_uptime", "compute_capability", "sensor_quality", "label_similarity",
+            "dominant_class", "times_selected", "times_reported", "times_dropped",
+            "times_straggler", "times_rejected", "delivery_rate", "mean_q", "mean_alpha",
+            "last_contribution_round", "final_mAP50", "final_ade", "final_fde",
+            "final_loss"] if c and c in view]
+        pct = dict(format="percent", min_value=0.0, max_value=1.0)
+        st.dataframe(
+            view[show_cols].sort_values(acc_col or "client_id"), hide_index=True,
+            width="stretch", height=min(38 * (len(view) + 1), 640),
+            column_config={
+                "client_id": st.column_config.NumberColumn("Car #"),
+                "link_uptime": st.column_config.ProgressColumn("V2I uptime", **pct),
+                "sensor_quality": st.column_config.ProgressColumn("Sensor quality", **pct),
+                "label_similarity": st.column_config.ProgressColumn("Label similarity", **pct),
+                "delivery_rate": st.column_config.ProgressColumn("Delivery rate", **pct),
+                (acc_col or "x"): st.column_config.ProgressColumn("Accuracy (own test)", **pct),
+                "compute_capability": st.column_config.NumberColumn("Compute (×ref)", format="%.2f"),
+                "mean_q": st.column_config.NumberColumn("Mean q_k", format="%.3f"),
+                "mean_alpha": st.column_config.NumberColumn("Mean weight α", format="%.3f"),
+                "final_mAP50": st.column_config.NumberColumn("mAP@0.5", format="%.3f"),
+                "final_ade": st.column_config.NumberColumn("ADE", format="%.3f"),
+                "final_fde": st.column_config.NumberColumn("FDE", format="%.3f"),
+                "final_loss": st.column_config.NumberColumn("Loss", format="%.3f"),
+                "rank": st.column_config.NumberColumn("Rank", format="%d"),
+            })
+        st.download_button("Download fleet CSV", view.to_csv(index=False).encode(),
+                           file_name="fleet.csv", key=f"{key}_dl")
+
+        if acc_col:
+            ranked = view.sort_values(acc_col)
+            fig = go.Figure()
+            for region, color in REGION_COLORS.items():
+                sub = ranked[ranked["region"] == region]
+                fig.add_trace(go.Bar(
+                    x=sub["client_id"].map(lambda c: f"car {c}"), y=100 * sub[acc_col], name=region,
+                    marker_color=color,
+                    customdata=sub[["weather", "n_test", "sensor_quality"]],
+                    hovertemplate="%{x}<br>%{y:.1f}% accuracy<br>weather %{customdata[0]}"
+                                  "<br>%{customdata[1]} test samples"
+                                  "<br>sensor quality %{customdata[2]:.2f}<extra>%{fullData.name}</extra>"))
+            fig.update_layout(title="Accuracy per vehicle (own test split), worst → best",
+                              barmode="overlay", bargap=0.15)
+            fig.update_xaxes(type="category", categoryorder="array",
+                             categoryarray=ranked["client_id"].map(lambda c: f"car {c}").tolist())
+            show(_style(fig, "Accuracy (%)", x_title="Vehicle"))
+
+            left, right = st.columns(2)
+            for col, xcol, xt in ((left, "sensor_quality", "Sensor quality"),
+                                  (right, "label_similarity", "Label similarity to fleet")):
+                fig = go.Figure()
+                for region, color in REGION_COLORS.items():
+                    sub = view[view["region"] == region]
+                    fig.add_trace(go.Scatter(
+                        x=sub[xcol], y=100 * sub[acc_col], mode="markers", name=region,
+                        marker=dict(color=color, size=10, line=dict(width=2, color="white")),
+                        text=sub["client_id"].map(lambda c: f"car #{c}"),
+                        hovertemplate="%{text}<br>" + xt + " %{x:.2f}<br>%{y:.1f}%<extra></extra>"))
+                fig.update_layout(title=f"{xt} vs. accuracy", hovermode="closest")
+                with col:
+                    show(_style(fig, "Accuracy (%)", x_title=xt))
+
+    # ---- one vehicle
+    with tabs[1]:
+        ids = table["client_id"].astype(int).tolist()
+        default = int(table.loc[table[acc_col].idxmin(), "client_id"]) if acc_col else ids[0]
+        cid = st.selectbox("Vehicle", ids, index=ids.index(default), key=f"{key}_car",
+                           format_func=lambda c: _car_label(table, c))
+        vehicle_detail(table[table["client_id"] == cid].iloc[0], rounds, acc_col)
+
+    # ---- heatmaps
+    with tabs[2]:
+        if rounds.empty:
+            st.info("This run has no per-round vehicle telemetry.")
+        else:
+            participation_heatmap(rounds)
+            if "accuracy" in rounds:
+                accuracy_heatmap(rounds, table)
+
+    # ---- groups
+    with tabs[3]:
+        if not acc_col:
+            st.info("No per-vehicle accuracy for this run.")
+        else:
+            left, right = st.columns(2)
+            for col, by in ((left, "region"), (right, "weather")):
+                g = data.group_accuracy(table, by, acc_col)
+                fig = go.Figure(go.Bar(
+                    x=g[by], y=100 * g["mean"], marker_color="#2a78d6",
+                    error_y=dict(type="data", symmetric=False,
+                                 array=100 * (g["max"] - g["mean"]),
+                                 arrayminus=100 * (g["mean"] - g["min"]), color="#888"),
+                    customdata=g[["vehicles", "min", "max"]],
+                    hovertemplate="%{x}: mean %{y:.1f}%<br>%{customdata[0]} vehicles"
+                                  "<br>range %{customdata[1]:.1%} – %{customdata[2]:.1%}<extra></extra>"))
+                fig.update_layout(title=f"Accuracy by {by} (bar = mean, whisker = min–max)",
+                                  showlegend=False)
+                with col:
+                    show(_style(fig, "Accuracy (%)", x_title=""))
+            g = table.dropna(subset=[acc_col]).assign(sensors=table["calibrated"].map(
+                {True: "calibrated", False: "uncalibrated"}))
+            g = data.group_accuracy(g, "sensors", acc_col)
+            st.dataframe(g.assign(mean=100 * g["mean"], min=100 * g["min"], max=100 * g["max"]),
+                         hide_index=True, width="stretch",
+                         column_config={c: st.column_config.NumberColumn(f"{c} acc. (%)", format="%.1f")
+                                        for c in ("mean", "min", "max")})
+
+    # ---- across arms
+    with tabs[4]:
+        across_methods(table)
+
+
+def _car_label(table: pd.DataFrame, cid: int) -> str:
+    row = table[table["client_id"] == cid].iloc[0]
+    flags = ("" if row["calibrated"] else " · uncalibrated") + (" · byzantine" if row["byzantine"] else "")
+    return f"Car #{cid} — {row['region']}, {row['weather']}{flags}"
+
+
+def vehicle_detail(row: pd.Series, rounds: pd.DataFrame, acc_col: Optional[str]) -> None:
+    cid = int(row["client_id"])
+    c = st.columns(5)
+    c[0].metric("Region / weather", f"{row['region']} / {row['weather']}")
+    c[1].metric("Training samples", int(row["n_train"]), f"{int(row['n_test'])} test",
+                delta_color="off", delta_arrow="off")
+    c[2].metric("V2I uptime", f"{row['link_uptime']:.0%}")
+    c[3].metric("Sensor quality", f"{row['sensor_quality']:.2f}",
+                "calibrated" if row["calibrated"] else "uncalibrated",
+                delta_color="normal" if row["calibrated"] else "inverse", delta_arrow="off")
+    if acc_col and pd.notna(row.get(acc_col)):
+        c[4].metric("Accuracy (own test)", f"{100 * row[acc_col]:.1f}%",
+                    f"rank {int(row['rank'])}" if "rank" in row and pd.notna(row["rank"]) else None,
+                    delta_color="off", delta_arrow="off")
+
+    left, right = st.columns([2, 1])
+    with right:
+        shares = row.filter(like="share_")
+        fig = go.Figure(go.Bar(x=100 * shares.values, y=[s[6:] for s in shares.index],
+                               orientation="h", marker_color="#2a78d6",
+                               hovertemplate="%{y}: %{x:.1f}%<extra></extra>"))
+        fig.update_layout(title="What this car sees (label mix)", showlegend=False,
+                          yaxis=dict(autorange="reversed"))
+        show(_style(fig, "", x_title="% of training samples", height=300))
+        facts = {k: row.get(k) for k in ("compute_capability", "label_similarity", "times_selected",
+                                         "times_reported", "times_dropped", "mean_q", "mean_alpha",
+                                         "final_mAP50", "final_ade", "final_fde") if k in row}
+        st.dataframe(pd.DataFrame({"value": facts}).astype(str), width="stretch")
+    with left:
+        mine = rounds[rounds["client_id"] == cid] if not rounds.empty else rounds
+        if mine.empty:
+            st.info("No per-round telemetry for this car in this run.")
+            return
+        fig = go.Figure()
+        if "accuracy" in mine:
+            fig.add_trace(go.Scatter(x=mine["round"], y=100 * mine["accuracy"], mode="lines",
+                                     name="global model on this car", line=dict(color="#2a78d6"),
+                                     hovertemplate="round %{x}: %{y:.1f}%<extra></extra>"))
+        for status, (color, label) in STATUS_STYLE.items():
+            if status == "not_selected":
+                continue
+            ev = mine[mine["status"] == status]
+            if ev.empty:
+                continue
+            y = 100 * ev["accuracy"] if "accuracy" in ev else [0] * len(ev)
+            fig.add_trace(go.Scatter(x=ev["round"], y=y, mode="markers", name=label,
+                                     marker=dict(color=color, size=10, line=dict(width=2, color="white")),
+                                     hovertemplate="round %{x}: " + label + "<extra></extra>"))
+        fig.update_layout(title=f"Car #{cid}: accuracy each round, and when it took part",
+                          hovermode="closest")
+        show(_style(fig, "Accuracy (%)"))
+        cols = [c for c in ("round", "status", "accuracy", "q_k", "alpha", "local_epochs",
+                            "train_loss", "update_norm", "uplink_kb") if c in mine]
+        st.dataframe(mine[mine["status"] != "not_selected"][cols], hide_index=True,
+                     width="stretch", height=260)
+
+
+def participation_heatmap(rounds: pd.DataFrame) -> None:
+    order = list(STATUS_STYLE)
+    code = {s: i for i, s in enumerate(order)}
+    grid = rounds.pivot_table(index="client_id", columns="round", values="status",
+                              aggfunc="first").reindex(columns=sorted(rounds["round"].unique()))
+    z = grid.apply(lambda col: col.map(code)).astype(float)
+    n = len(order)
+    scale = []
+    for i, s in enumerate(order):
+        scale += [(i / n, STATUS_STYLE[s][0]), ((i + 1) / n, STATUS_STYLE[s][0])]
+    fig = go.Figure(go.Heatmap(
+        z=z.values, x=z.columns, y=[f"car {c}" for c in z.index], zmin=-0.5, zmax=n - 0.5,
+        colorscale=scale, xgap=1, ygap=1, text=grid.values,
+        hovertemplate="%{y} · round %{x}<br>%{text}<extra></extra>",
+        colorbar=dict(tickvals=list(range(n)), ticktext=[STATUS_STYLE[s][1] for s in order],
+                      title=None)))
+    fig.update_layout(title="Who took part each round", yaxis=dict(type="category"))
+    show(_style(fig, "Vehicle", height=max(320, 14 * len(z) + 80)))
+
+
+def accuracy_heatmap(rounds: pd.DataFrame, table: pd.DataFrame) -> None:
+    grid = rounds.pivot_table(index="client_id", columns="round", values="accuracy")
+    final = grid.iloc[:, -1].sort_values()
+    grid = grid.loc[final.index]
+    fig = go.Figure(go.Heatmap(
+        z=100 * grid.values, x=grid.columns, y=[f"car {c}" for c in grid.index],
+        colorscale=[(0, "#eef4fc"), (1, "#0d3d75")], zmin=0, zmax=100, xgap=1, ygap=1,
+        hovertemplate="%{y} · round %{x}<br>%{z:.1f}%<extra></extra>",
+        colorbar=dict(title="Acc. %")))
+    fig.update_layout(title="Global model accuracy on each car, round by round (worst at bottom)",
+                      yaxis=dict(type="category"))
+    show(_style(fig, "Vehicle", height=max(320, 14 * len(grid) + 80)))
+
+
+def across_methods(table: pd.DataFrame) -> None:
+    wide = data.compare_arms_per_vehicle()
+    if wide.empty or wide.shape[1] < 2:
+        st.info("Per-vehicle results for the benchmark arms are not available yet. Run "
+                "`python -m fedav.cli benchmark --config configs/default.yaml` with this "
+                "version and copy the arm folders into results/benchmark/.")
+        return
+    st.markdown("**Each car's accuracy under every method** (own test split)")
+    long = wide.reset_index(names="client_id").melt("client_id", var_name="arm",
+                                                      value_name="acc").dropna()
+    order = (wide["proposed_fl"] if "proposed_fl" in wide else wide.iloc[:, 0]).sort_values().index
+    fig = go.Figure()
+    for arm in data.ARM_ORDER:
+        sub = long[long["arm"] == arm].set_index("client_id").reindex(order).dropna()
+        if sub.empty:
+            continue
+        fig.add_trace(go.Scatter(
+            x=[f"car {c}" for c in sub.index], y=100 * sub["acc"], mode="markers",
+            name=data.ARM_LABELS[arm],
+            marker=dict(color=data.ARM_COLORS[arm], size=9, line=dict(width=2, color="white")),
+            hovertemplate="%{x}: %{y:.1f}%<extra>" + data.ARM_LABELS[arm] + "</extra>"))
+    fig.update_xaxes(type="category", categoryorder="array",
+                     categoryarray=[f"car {c}" for c in order])
+    show(_style(fig, "Accuracy (%)", x_title="Vehicle (sorted by Proposed FL)"))
+    if {"proposed_fl", "std_fedavg"} <= set(wide):
+        diff = (wide["proposed_fl"] - wide["std_fedavg"]).dropna()
+        c = st.columns(3)
+        c[0].metric("Cars better off with Proposed FL", int((diff > 0).sum()))
+        c[1].metric("Cars worse off", int((diff < 0).sum()))
+        c[2].metric("Unchanged", int((diff == 0).sum()))
+        merged = table[["client_id", "region", "weather", "calibrated"]].merge(
+            (100 * wide).round(1).reset_index(names="client_id"), on="client_id")
+        merged["Δ proposed − FedAvg (pts)"] = (100 * diff).round(1).reindex(merged["client_id"]).values
+        st.dataframe(merged.sort_values("Δ proposed − FedAvg (pts)").rename(columns=data.ARM_LABELS),
+                     hide_index=True, width="stretch")
+    if "local_only" in wide:
+        st.caption("Local-only trains 12 of the vehicles alone; the others have no local-only model.")
+
+
 PAGES = {
     "Overview": page_overview,
+    "Fleet (every vehicle)": page_fleet,
     "Benchmark": page_benchmark,
     "Ablation": page_ablation,
     "Launch a run": page_launch,

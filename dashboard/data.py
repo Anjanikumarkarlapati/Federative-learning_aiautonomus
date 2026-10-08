@@ -248,3 +248,123 @@ def validation_figures() -> List[str]:
     if not os.path.isdir(fig_dir):
         return []
     return [os.path.join(fig_dir, f) for f in sorted(os.listdir(fig_dir)) if f.endswith(".png")]
+
+
+# ----------------------------------------------------------------------- vehicles
+
+VEHICLE_STATUSES = ["reported", "not_selected", "dropped", "straggler", "corrupt", "rejected"]
+
+
+def has_vehicle_data(run_dir: str) -> bool:
+    return os.path.exists(os.path.join(run_dir, "vehicles.json")) or \
+        os.path.exists(os.path.join(run_dir, "config.json"))
+
+
+def load_vehicle_profiles(run_dir: str) -> pd.DataFrame:
+    """One row per vehicle as the fleet was built.
+
+    Runs written by this version carry ``vehicles.json``. Older runs only have
+    ``config.json``; the fleet is a deterministic function of the config and
+    seed, so it is rebuilt exactly from that instead.
+    """
+    records = read_json(os.path.join(run_dir, "vehicles.json"))
+    if records is None:
+        cfg = load_config(run_dir)
+        if cfg is None:
+            return pd.DataFrame()
+        records = rebuild_profiles(json.dumps(cfg, sort_keys=True))
+    df = pd.DataFrame.from_records(records)
+    if df.empty:
+        return df
+    hist = pd.json_normalize(df.pop("label_histogram")).add_prefix("share_")
+    return pd.concat([df, hist], axis=1)
+
+
+def rebuild_profiles(cfg_json: str) -> List[Dict[str, Any]]:
+    from fedav.config import FLConfig
+    from fedav.data.federated import build_fleet
+    from fedav.metrics.fleet import vehicle_profiles
+
+    return vehicle_profiles(build_fleet(FLConfig.from_dict(json.loads(cfg_json))))
+
+
+def load_vehicle_rounds(run_dir: str) -> pd.DataFrame:
+    """Long format, one row per (round, vehicle). Tolerates a half-written tail."""
+    path = os.path.join(run_dir, "vehicle_rounds.jsonl")
+    rows: List[Dict[str, Any]] = []
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    rows.append(json.loads(line))
+                except ValueError:
+                    continue
+    return pd.DataFrame.from_records(rows)
+
+
+def load_vehicle_summary(run_dir: str) -> pd.DataFrame:
+    data = read_json(os.path.join(run_dir, "vehicle_summary.json"))
+    if not data:
+        return pd.DataFrame()
+    return pd.DataFrame.from_records(data.get("vehicles", []))
+
+
+def participation_from_rounds(rounds: pd.DataFrame) -> pd.DataFrame:
+    """Participation counts recomputed from vehicle_rounds - works mid-run."""
+    if rounds.empty:
+        return pd.DataFrame()
+    counts = pd.crosstab(rounds["client_id"], rounds["status"])
+    for s in VEHICLE_STATUSES:
+        if s not in counts:
+            counts[s] = 0
+    out = pd.DataFrame({
+        "times_selected": counts.drop(columns="not_selected").sum(axis=1),
+        "times_reported": counts["reported"],
+        "times_dropped": counts["dropped"],
+        "times_straggler": counts["straggler"],
+        "times_rejected": counts["rejected"],
+    })
+    out["delivery_rate"] = (out["times_reported"] / out["times_selected"]).where(out["times_selected"] > 0)
+    rep = rounds[rounds["status"] == "reported"]
+    if not rep.empty:
+        means = rep.groupby("client_id")[[c for c in ("q_k", "alpha") if c in rep]].mean()
+        out = out.join(means.rename(columns={"q_k": "mean_q", "alpha": "mean_alpha"}))
+        out["last_contribution_round"] = rep.groupby("client_id")["round"].max()
+    if "accuracy" in rounds:
+        latest = rounds.dropna(subset=["accuracy"]).sort_values("round").groupby("client_id").last()
+        out["latest_accuracy"] = latest["accuracy"]
+    return out.reset_index()
+
+
+def fleet_table(run_dir: str) -> pd.DataFrame:
+    """Every vehicle: profile + participation + how it ends up, in one table."""
+    profiles = load_vehicle_profiles(run_dir)
+    if profiles.empty:
+        return profiles
+    summary = load_vehicle_summary(run_dir)
+    if summary.empty:
+        summary = participation_from_rounds(load_vehicle_rounds(run_dir))
+    if not summary.empty:
+        profiles = profiles.merge(summary, on="client_id", how="left")
+    if "final_accuracy" in profiles:
+        profiles["rank"] = profiles["final_accuracy"].rank(ascending=False, method="min")
+    return profiles
+
+
+def group_accuracy(table: pd.DataFrame, by: str, metric: str = "final_accuracy") -> pd.DataFrame:
+    if metric not in table or by not in table:
+        return pd.DataFrame()
+    g = table.dropna(subset=[metric]).groupby(by)[metric]
+    return pd.DataFrame({"vehicles": g.size(), "mean": g.mean(), "min": g.min(),
+                         "max": g.max()}).reset_index()
+
+
+def compare_arms_per_vehicle(base_dir: Optional[str] = None) -> pd.DataFrame:
+    """Wide table: each vehicle's final accuracy under every benchmark arm."""
+    base_dir = base_dir or _path("results", "benchmark")
+    cols = {}
+    for arm in ARM_ORDER:
+        s = load_vehicle_summary(os.path.join(base_dir, arm))
+        if not s.empty and "final_accuracy" in s:
+            cols[arm] = s.set_index("client_id")["final_accuracy"]
+    return pd.DataFrame(cols)

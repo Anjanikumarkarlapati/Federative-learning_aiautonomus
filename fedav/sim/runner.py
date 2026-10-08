@@ -38,6 +38,8 @@ from ..client.trainer import ClientTrainer, ClientUpdate
 from ..config import FLConfig
 from ..data.federated import Fleet, build_fleet
 from ..metrics.evaluation import EvalResult, evaluate, evaluate_fleet
+from ..metrics.fleet import (VehicleTracker, evaluate_vehicles, per_vehicle_accuracy,
+                             write_vehicle_profiles, write_vehicle_summary)
 from ..metrics.logger import MetricsLogger
 from ..models.perception import build_model
 from ..privacy.dp import PrivacyAccountant
@@ -116,6 +118,7 @@ class SimRunner:
         self.logger = logger or MetricsLogger(cfg.name, cfg.out_dir,
                                               cfg.fingerprint(), echo=echo)
         self._last_sync: Dict[int, int] = {}      # client -> round whose model it holds
+        self.vehicles = VehicleTracker(self.logger.run_dir, self.fleet)
         self._mask_scale = 1e-2                   # matched to the update magnitude
         self.accountant: Optional[PrivacyAccountant] = None
         if cfg.dp.enabled:
@@ -161,8 +164,13 @@ class SimRunner:
         return total
 
     def _collect(self, selected: List[int], round_id: int
-                 ) -> Tuple[List[ContributedUpdate], List[ClientUpdate], Dict[str, int]]:
-        """Local training + uplink for every selected vehicle."""
+                 ) -> Tuple[List[ContributedUpdate], List[ClientUpdate], Dict[str, int],
+                            Dict[int, Dict[str, Any]]]:
+        """Local training + uplink for every selected vehicle.
+
+        Also returns a per-vehicle event (status, q_k, epochs, loss) for the
+        simulator's own telemetry - none of it reaches the aggregator.
+        """
         dp_sigma = 0.0
         if self.accountant is not None:
             dp_sigma = (self.accountant.client_sigma(len(selected))
@@ -171,14 +179,21 @@ class SimRunner:
         contributed: List[ContributedUpdate] = []
         raw_updates: List[ClientUpdate] = []
         stats = {"dropped": 0, "straggler": 0, "corrupt": 0}
+        events: Dict[int, Dict[str, Any]] = {}
         generator = make_rng(self.cfg.seed, round_id, 55)
 
         for client_id in selected:
             vehicle = self.fleet[client_id]
             update = self.trainer.train(self.global_state, vehicle, round_id,
                                         self.fleet.reference_histogram, dp_sigma)
+            event = {"q_k": round(float(update.q_k), 5),
+                     "local_epochs": int(update.local_epochs),
+                     "train_loss": round(float(update.train_loss), 5),
+                     "update_norm": round(float(update.update_norm), 6),
+                     "train_seconds": round(float(update.duration_s), 3)}
             if update.duration_s > self.cfg.selection.round_timeout_s:
                 stats["straggler"] += 1            # PRD 16: past the round window
+                events[client_id] = {"status": "straggler", **event}
                 continue
             payload = self.compressor.compress(client_id, update.delta)
             if not self.cfg.comm.send_deltas:
@@ -189,6 +204,7 @@ class SimRunner:
             delivered, _, _ = self.channel.send_up(blob, vehicle.profile.link_uptime, generator)
             if not delivered:
                 stats["dropped"] += 1              # PRD 16: client drops mid-round
+                events[client_id] = {"status": "dropped", **event}
                 continue
             try:
                 delta, meta = self.serializer.unpack(blob)
@@ -196,12 +212,15 @@ class SimRunner:
                     delta = state_sub(delta, self.global_state)
             except ChecksumError:
                 stats["corrupt"] += 1
+                events[client_id] = {"status": "corrupt", **event}
                 continue
+            events[client_id] = {"status": "reported", "uplink_kb": round(len(blob) / 1024, 2),
+                                 **event}
             contributed.append(ContributedUpdate(
                 client_id=int(meta["client_id"]), delta=delta, n_k=int(meta["n_k"]),
                 q_k=float(meta["q_k"]), steps=int(meta.get("steps", 1))))
             raw_updates.append(update)
-        return contributed, raw_updates, stats
+        return contributed, raw_updates, stats, events
 
     def _secure_sum(self, updates: List[ContributedUpdate], alphas: np.ndarray,
                     round_id: int) -> Tuple[StateDict, bool]:
@@ -245,6 +264,7 @@ class SimRunner:
         cfg = self.cfg
         started = time.perf_counter()
         self.logger.write_config(cfg.to_dict())
+        write_vehicle_profiles(self.logger.run_dir, self.fleet)
         previous_broadcast: Optional[StateDict] = None
         best_eval = EvalResult()
         best_state = clone_state(self.global_state)
@@ -268,8 +288,10 @@ class SimRunner:
             previous_broadcast = clone_state(self.global_state)
 
             # (4-8) local training + uplink
-            contributed, raw_updates, drop_stats = self._collect(selection.selected, round_id)
+            contributed, raw_updates, drop_stats, events = self._collect(
+                selection.selected, round_id)
             if not contributed:
+                self.vehicles.log_round(round_id, events)
                 self.logger.log({"round": round_id, "clients_selected": len(selection.selected),
                                  "clients_reported": 0, "note": "no updates received",
                                  **{f"drop_{k}": v for k, v in drop_stats.items()}})
@@ -278,9 +300,13 @@ class SimRunner:
             rejected: List[int] = []
             if cfg.aggregation.byzantine_robust:
                 contributed, rejected = FedAggregator.norm_filter(contributed)
+                for client_id in rejected:
+                    events[client_id]["status"] = "rejected"
 
             # (9) quality-aware FedAvg, optionally through secure aggregation
             aggregated, alphas = self.aggregator.combine(contributed)
+            for update, alpha in zip(contributed, alphas):
+                events[update.client_id]["alpha"] = round(float(alpha), 5)
             secure_ok = False
             if cfg.dp.secure_aggregation and not cfg.aggregation.byzantine_robust:
                 aggregated, secure_ok = self._secure_sum(contributed, alphas, round_id)
@@ -299,6 +325,8 @@ class SimRunner:
             # metrics
             self.model.load_state_dict(self.global_state, strict=False)
             result = evaluate(self.model, test_loader, cfg.model, cfg.data.num_classes, cfg.device)
+            self.vehicles.log_round(round_id, events,
+                                    per_vehicle_accuracy(self.model, self.fleet, cfg, cfg.device))
             round_mb = self.channel.stats.total_mb
             total_mb += round_mb
             if cfg.comm.adaptive_sparsity and cfg.comm.topk_ratio < 1.0:
@@ -364,6 +392,10 @@ class SimRunner:
             wall_clock_s=time.perf_counter() - started,
         )
         self.logger.write_summary(result.summary())
+        write_vehicle_summary(
+            self.logger.run_dir, evaluate_vehicles(self.model, self.fleet, cfg, cfg.device),
+            self.vehicles.participation(),
+            note="final_* = best global model on each vehicle's own test split")
         torch.save({"state_dict": best_state, "config": cfg.to_dict()},
                    os.path.join(self.logger.run_dir, "best_model.pt"))
         return result
