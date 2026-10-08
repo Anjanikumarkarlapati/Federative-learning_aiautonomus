@@ -108,3 +108,12 @@ def test_profiles_rebuilt_from_config_match_written_ones(tiny_run):
     finally:
         os.rename(os.path.join(run_dir, "v.bak"), os.path.join(run_dir, "vehicles.json"))
     pd.testing.assert_frame_equal(written, rebuilt)
+
+
+def test_standard_fedavg_baseline_is_plain_fedavg():
+    from fedav.config import default_config
+    from fedav.sim.baselines import fedavg_config
+
+    agg = fedavg_config(default_config()).aggregation
+    assert not agg.quality_aware and agg.server_momentum == 0.0
+    assert agg.normalize_local_steps is False

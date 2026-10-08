@@ -54,8 +54,10 @@ def fedavg_config(base: FLConfig) -> FLConfig:
     """McMahan-style FedAvg: no quality weighting, no momentum, uncompressed."""
     return base.merged({
         "name": "std_fedavg",
+        # plain weighted mean of raw deltas: FedNova normalisation is part of
+        # the proposed method, not of McMahan FedAvg
         "aggregation": {"quality_aware": False, "server_momentum": 0.0,
-                        "byzantine_robust": False},
+                        "byzantine_robust": False, "normalize_local_steps": False},
         "selection": {"trajectory_aware": False, "uptime_threshold": 0.0,
                       "fairness_k": 10**6},
         "train": {"adaptive_epochs": False, "fedprox_mu": 0.0},
