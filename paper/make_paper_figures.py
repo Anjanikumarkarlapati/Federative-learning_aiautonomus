@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Regenerate every figure in paper/ from the committed evidence in results/.
 
-    python paper/make_paper_figures.py
+    python paper/make_paper_figures.py            # figures for paper/paper.md
+    python paper/make_paper_figures.py --ieee     # serif, column-width figures for paper/ieee/
 
 Nothing is typed by hand: each number plotted is read from results/**/summary.json,
 rounds.csv or the *.json attribution files. Figure 1 is a schematic and plots no data.
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 
 import matplotlib
 
@@ -21,7 +23,8 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES = os.path.join(ROOT, "results")
-OUT = os.path.join(ROOT, "paper", "figures")
+IEEE = "--ieee" in sys.argv
+OUT = os.path.join(ROOT, "paper", "ieee", "figures") if IEEE else os.path.join(ROOT, "paper", "figures")
 os.makedirs(OUT, exist_ok=True)
 
 # Okabe-Ito colour-blind-safe palette.
@@ -51,6 +54,12 @@ plt.rcParams.update({
     "savefig.dpi": 300,
     "savefig.bbox": "tight",
 })
+if IEEE:
+    # Times-like serif to match the IEEEtran body text; sizes chosen so that text is
+    # about 7-8 pt after the figure is scaled to the 3.5 in column or 7.16 in page width.
+    plt.rcParams.update({"font.family": "STIXGeneral", "mathtext.fontset": "stix",
+                         "font.size": 8.5, "axes.labelsize": 8.5, "axes.titlesize": 9,
+                         "xtick.labelsize": 8, "ytick.labelsize": 8, "legend.fontsize": 7.5})
 
 
 def save(fig, name):
@@ -129,7 +138,7 @@ def fig_architecture():
 # --------------------------------------------------------------------------- Fig 2
 def fig_learning_curves():
     cen, fed, prop, loc = (rounds(a) for a in ("centralized", "std_fedavg", "proposed_fl", "local_only"))
-    fig, ax = plt.subplots(figsize=(6.4, 3.6))
+    fig, ax = plt.subplots(figsize=(3.5, 2.75) if IEEE else (6.4, 3.6))
     ax.plot(cen["round"], cen["accuracy"] * 100, color=C["central"], lw=1.4, ls="--",
             label="Centralized (upper bound, pools raw data)")
     ax.plot(fed["round"], fed["accuracy"] * 100, color=C["fedavg"], lw=1.0, alpha=0.35)
@@ -144,7 +153,16 @@ def fig_learning_curves():
     ax.set_ylabel("Accuracy on IID global test set (%)")
     ax.set_ylim(0, 100)
     ax.set_xlim(1, 60)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=2, fontsize=8)
+    if IEEE:
+        for line in ax.get_lines():
+            if line.get_label() == "Centralized (upper bound, pools raw data)":
+                line.set_label("Centralized (upper bound)")
+            if line.get_label().startswith("Local-only"):
+                line.set_label(f"Local-only ({loc_mean:.1f}%)")
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=2, fontsize=6.8,
+                  handlelength=1.8, columnspacing=1.0)
+    else:
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=2, fontsize=8)
     save(fig, "fig2_learning_curves")
 
 
