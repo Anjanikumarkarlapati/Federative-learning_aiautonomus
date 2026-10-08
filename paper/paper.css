@@ -1,0 +1,21 @@
+@page { size: A4; margin: 20mm 18mm 20mm 18mm; }
+body { font-family: "Georgia", "DejaVu Serif", serif; font-size: 10.5pt; line-height: 1.42; max-width: 175mm; margin: 0 auto; color: #111; }
+header#title-block-header { text-align: center; margin-bottom: 1.2em; }
+h1.title { font-size: 17pt; line-height: 1.25; margin: 0.2em 0 0.4em; }
+p.author, p.date { margin: 0.1em 0; color: #444; font-size: 10pt; }
+h1 { font-size: 13.5pt; margin-top: 1.5em; border-bottom: 1px solid #bbb; padding-bottom: 2px; }
+h2 { font-size: 11.5pt; margin-top: 1.2em; }
+p { text-align: justify; hyphens: auto; margin: 0.5em 0; }
+figure { margin: 1em 0; text-align: center; break-inside: avoid; }
+figure img { max-width: 100%; height: auto; }
+figcaption { font-size: 9pt; text-align: justify; color: #222; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 8.8pt; margin: 0.6em 0 1em; break-inside: avoid; }
+caption { caption-side: top; text-align: left; font-size: 9pt; padding-bottom: 3px; }
+th, td { padding: 3px 6px; }
+thead th { border-top: 1.5px solid #000; border-bottom: 1px solid #000; }
+tbody tr:last-child td { border-bottom: 1.5px solid #000; }
+code, pre { font-family: "DejaVu Sans Mono", monospace; font-size: 8.3pt; }
+pre { background: #f6f6f6; padding: 6px 8px; overflow-x: auto; break-inside: avoid; }
+math { font-size: 1.04em; }
+ol, ul { margin: 0.4em 0 0.4em 1.2em; padding-left: 0.6em; }
+li { margin: 0.2em 0; }
