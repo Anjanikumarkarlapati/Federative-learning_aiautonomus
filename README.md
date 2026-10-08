@@ -71,6 +71,7 @@ streamlit run dashboard/app.py          # opens http://localhost:8501
 | Page | What it shows |
 |---|---|
 | Overview | headline numbers vs. FedAvg and the PRD 12.3 acceptance checklist |
+| Fleet (every vehicle) | all cars in one table (filter by region / weather / calibration, CSV export); accuracy per car, worst to best; sensor quality and label similarity vs. accuracy; a drill-down per car (profile, label mix, accuracy every round, when it took part); who-took-part and per-car accuracy heatmaps over rounds; region and weather breakdowns; each car's accuracy under every benchmark method |
 | Benchmark | the four arms round by round: accuracy, uplink MB, loss, ADE, worst-served vehicle |
 | Ablation | each enhancement in isolation (`results/ingredients`, `attribution`, `fix`) |
 | Launch a run | set N, C, E, rounds, quality/trajectory-aware, DP ε, top-k, Byzantine defence; start it and watch rounds stream in |
@@ -95,8 +96,18 @@ runs/proposed_fl/
 ├── rounds.jsonl     # one JSON record per round (FR-08)
 ├── rounds.csv       # the same metrics, spreadsheet-friendly
 ├── summary.json     # final accuracy, rounds-to-target, MB/round, privacy spend
+├── vehicles.json          # every vehicle's profile: region, weather, calibration,
+│                          #   shard sizes, V2I uptime, compute, sensor quality, label mix
+├── vehicle_rounds.jsonl   # every vehicle, every round: selected / reported / dropped /
+│                          #   straggler / rejected, q_k, weight α_k, local loss, and the
+│                          #   global model's accuracy on that car's own test split
+├── vehicle_summary.json   # per-vehicle participation counts + the reported model's
+│                          #   accuracy / mAP / ADE / FDE on each car's own test split
 └── best_model.pt    # best global checkpoint
 ```
+
+The per-vehicle files are simulator-side bookkeeping: nothing in them crosses the simulated
+V2I link, and recording them does not change training (runs reproduce bit-for-bit).
 
 ### Programmatic use
 
@@ -578,7 +589,8 @@ fedav/
 ├── privacy/dp.py             # clipping, analytic Gaussian, RDP accountant
 ├── metrics/
 │   ├── evaluation.py         # accuracy, mAP@0.5, ADE/FDE, per-client dispersion
-│   └── logger.py             # JSONL + CSV + summary, MLflow/W&B sink hook
+│   ├── logger.py             # JSONL + CSV + summary, MLflow/W&B sink hook
+│   └── fleet.py              # per-vehicle profiles, per-round records, final scorecard
 ├── sim/
 │   ├── runner.py             # SimRunner: the PRD section 9 loop
 │   ├── baselines.py          # centralized / local-only / standard FedAvg presets
