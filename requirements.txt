@@ -15,3 +15,8 @@ pytest>=7.4
 # Optional DP-SGD reference implementation (PRD 14); this repo implements its
 # own clipping + RDP accounting so Opacus is not required.
 # opacus>=1.4
+
+# Dashboard (streamlit run dashboard/app.py)
+streamlit>=1.40
+plotly>=5.18
+pandas>=2.0

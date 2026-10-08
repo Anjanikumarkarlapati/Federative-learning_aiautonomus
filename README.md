@@ -61,6 +61,25 @@ python -m fedav.cli ablation --config configs/quick.yaml
 python -m fedav.cli run --config configs/dp.yaml
 ```
 
+### Dashboard
+
+```bash
+pip install -r requirements.txt
+streamlit run dashboard/app.py          # opens http://localhost:8501
+```
+
+| Page | What it shows |
+|---|---|
+| Overview | headline numbers vs. FedAvg and the PRD 12.3 acceptance checklist |
+| Benchmark | the four arms round by round: accuracy, uplink MB, loss, ADE, worst-served vehicle |
+| Ablation | each enhancement in isolation (`results/ingredients`, `attribution`, `fix`) |
+| Launch a run | set N, C, E, rounds, quality/trajectory-aware, DP ε, top-k, Byzantine defence; start it and watch rounds stream in |
+| Run explorer | any run under `runs/` or `results/`, with per-round table, summary, config and CSV download |
+| Validation | the 14 mathematical-validation figures |
+
+The dashboard only reads what the framework already writes and launches runs through the same
+CLI below, so nothing in `fedav/` depends on Streamlit.
+
 Any config field can be overridden from the command line:
 
 ```bash
@@ -566,6 +585,10 @@ fedav/
 │   ├── benchmark.py          # 4-arm comparison + PRD 12.3 acceptance check
 │   └── ablation.py           # per-ingredient study
 └── utils/                    # seeding, parameter-vector algebra
+
+dashboard/
+├── app.py                    # Streamlit dashboard: streamlit run dashboard/app.py
+└── data.py                   # result loaders + run launcher, Streamlit-free and unit-tested
 ```
 
 ---
