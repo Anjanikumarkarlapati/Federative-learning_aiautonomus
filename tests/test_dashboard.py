@@ -14,9 +14,18 @@ def test_benchmark_tables_load_committed_report():
     assert report is not None
     table = data.benchmark_table(report)
     assert list(table["arm"]) == data.ARM_ORDER
-    assert table.set_index("arm").loc["proposed_fl", "Accuracy (%)"] == pytest.approx(84.67, abs=0.01)
+    assert table.set_index("arm").loc["proposed_fl", "Accuracy (%)"] == pytest.approx(82.17, abs=0.01)
     acc = data.acceptance_table(report)
-    assert len(acc) == 8 and acc["pass"].sum() == 3
+    assert len(acc) == 8 and acc["pass"].sum() == 4
+
+
+def test_committed_benchmark_has_every_vehicle_for_every_arm():
+    for arm in data.ARM_ORDER:
+        table = data.fleet_table(os.path.join(data.REPO_ROOT, "results", "benchmark", arm))
+        assert sorted(table["client_id"]) == list(range(50))
+    wide = data.compare_arms_per_vehicle()
+    assert wide[["centralized", "std_fedavg", "proposed_fl"]].notna().all().all()
+    assert wide["local_only"].notna().sum() == 12          # local-only trains 12 vehicles
 
 
 def test_benchmark_rounds_are_long_format():

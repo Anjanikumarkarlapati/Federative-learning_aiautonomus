@@ -1,21 +1,21 @@
 {
   "name": "proposed_fl",
-  "accuracy": 0.84667,
-  "final_accuracy": 0.84667,
-  "mAP50": 0.10042,
-  "ade": 0.20174,
-  "fde": 0.35464,
+  "accuracy": 0.82167,
+  "final_accuracy": 0.82167,
+  "mAP50": 0.09597,
+  "ade": 0.19826,
+  "fde": 0.3497,
   "rounds_run": 60,
   "rounds_to_target": null,
-  "mb_per_round": 8.7221,
-  "total_mb": 523.327,
+  "mb_per_round": 8.7094,
+  "total_mb": 522.561,
   "converged": false,
   "robustness": {
-    "client_acc_mean": 0.79369,
-    "client_acc_std": 0.1369,
-    "client_acc_min": 0.32653,
-    "client_acc_p10": 0.63098,
-    "client_acc_spread": 0.67347
+    "client_acc_mean": 0.78116,
+    "client_acc_std": 0.13285,
+    "client_acc_min": 0.40816,
+    "client_acc_p10": 0.62457,
+    "client_acc_spread": 0.59184
   },
   "privacy": {
     "mode": "no DP noise",
@@ -27,7 +27,7 @@
     "selection_gini": 0.46853333333333325,
     "mean_participation": 18.0
   },
-  "wall_clock_s": 3794.7,
-  "config_fingerprint": "47d140ca4677",
+  "wall_clock_s": 3496.7,
+  "config_fingerprint": "f5148d3e9200",
   "run": "proposed_fl"
 }

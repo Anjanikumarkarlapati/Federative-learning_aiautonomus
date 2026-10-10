@@ -412,87 +412,101 @@ All defaults are PRD section 10.
 
 ## 9. Results
 
-Measured on this repository — fleet `N = 50`, `C = 0.3`, `E = 5`, `R_max = 60`, Dirichlet `α = 0.4`, seed `1337`. All four arms share one fleet and one seed.
+Measured on this repository — fleet `N = 50`, `C = 0.3`, `E = 5`, `R_max = 60`, Dirichlet `α = 0.4`, seed `1337`. All four arms share one fleet and one seed; each arm starts from the same augmentation state whatever ran before it. Source: `results/benchmark/`, which also holds every vehicle's profile, per-round record and final scorecard (open it in the dashboard's **Fleet** page).
 
 | Metric | Centralized | Local-only | Std. FedAvg | Proposed FL |
 |---|---|---|---|---|
-| Model accuracy, best round (%) | 89.89 | 25.19 | 83.00 | 84.67 |
-| Model accuracy, last-10-round mean (%) | 88.21 | 24.70 | 80.09 | 82.94 |
-| mAP@0.5 | 0.5443 | 0.0050 | 0.0892 | 0.1004 |
-| Trajectory ADE | 0.1877 | 0.3234 | 0.1966 | 0.2017 |
+| Model accuracy, best round (%) | 89.89 | 25.19 | 81.50 | 82.17 |
+| Model accuracy, last-10-round mean (%) | 88.21 | 24.70 | 79.53 | 81.33 |
+| mAP@0.5 | 0.5443 | 0.0050 | 0.0892 | 0.0960 |
+| Trajectory ADE | 0.1877 | 0.3234 | 0.2062 | 0.1983 |
 | Rounds to target | — | — | — | — |
 | Rounds run | 60 | 75 | 60 | 60 |
-| Comm. cost (MB/round) | 0.000 | 0.000 | 74.561 | 8.722 |
-| Total comm. (MB) | 90.2 | 0.0 | 4473.7 | 523.3 |
-| Client acc. std (Non-IID) | 0.1264 | 0.0687 | 0.1304 | 0.1369 |
-| Worst-client accuracy | 0.5091 | 0.1689 | 0.4634 | 0.3265 |
-| Wall clock (s) | 1144 | 270 | 1957 | 3795 |
+| Comm. cost (MB/round) | 0.000 | 0.000 | 74.564 | 8.709 |
+| Total comm. (MB) | 90.2 | 0.0 | 4473.8 | 522.6 |
+| Client acc. std (Non-IID) | 0.1264 | 0.0687 | 0.1379 | 0.1328 |
+| Worst-client accuracy | 0.5091 | 0.1689 | 0.3265 | 0.4082 |
 
-**Convergence curve** — first round reaching each accuracy (federated arms; lower is faster):
+Wall-clock times are omitted: the federated arms were re-run while sharing the CPU, so their
+timings measure contention, not the algorithms.
+
+**Convergence curve** — first round reaching each accuracy (lower is faster):
 
 | Threshold | Centralized | Local-only | Std. FedAvg | Proposed FL |
 |---|---|---|---|---|
-| 60% | 3 | — | 18 | 16 |
-| 70% | 4 | — | 21 | 24 |
-| 75% | 5 | — | 28 | 28 |
-| 80% | 7 | — | 28 | 28 |
+| 60% | 3 | — | 18 | 20 |
+| 70% | 4 | — | 26 | 20 |
+| 75% | 5 | — | 28 | 32 |
+| 80% | 7 | — | 38 | 34 |
+| 81% | 9 | — | 51 | 37 |
 
-### Acceptance (PRD 12.3): **FAIL**
+### Acceptance (PRD 12.3): **FAIL** (4 of 8 pass)
 
 | Check | Requirement | Observed | Result |
 |---|---|---|---|
-| `accuracy_target` | accuracy >= 90.00% | observed=0.8467 | **FAIL** |
+| `accuracy_target` | accuracy >= 90.00% | observed=0.8217 | **FAIL** |
 | `convergence_speedup` | rounds-to-target cut by >= 25% vs standard FedAvg | proposed_rounds=None, fedavg_rounds=None, reduction=None | **FAIL** |
-| `communication_saving` | MB/round cut by >= 30% vs standard FedAvg | proposed_mb=8.7221, fedavg_mb=74.561, reduction=0.883 | **PASS** |
-| `communication_budget` | MB/round <= 9.0 | observed=8.7221 | **PASS** |
-| `non_iid_robustness` | cross-client accuracy dispersion <= standard FedAvg | proposed_std=0.1369, fedavg_std=0.13038 | **FAIL** |
+| `communication_saving` | MB/round cut by >= 30% vs standard FedAvg | proposed_mb=8.7094, fedavg_mb=74.564, reduction=0.8832 | **PASS** |
+| `communication_budget` | MB/round <= 9.0 | observed=8.7094 | **PASS** |
+| `non_iid_robustness` | cross-client accuracy dispersion <= standard FedAvg | proposed_std=0.13285, fedavg_std=0.13794 | **PASS** |
 | `convergence_speedup_relative` | rounds to 95% of the centralized ceiling, cut by >= 25% | threshold_accuracy=0.8539, proposed_rounds=None, fedavg_rounds=None, reduction=None | **FAIL** |
-| `accuracy_vs_ceiling` | proposed accuracy >= 95% of the centralized ceiling | centralized=0.8989, proposed=0.8467, ratio=0.9419 | **FAIL** |
+| `accuracy_vs_ceiling` | proposed accuracy >= 95% of the centralized ceiling | centralized=0.8989, proposed=0.8217, ratio=0.9141 | **FAIL** |
 | `privacy` | no raw sensor data egress in any federated arm | observed=True | **PASS** |
 
 ### Reading these results
 
-**Collaboration is worth 59 accuracy points.** Vehicles training alone on their own Non-IID shards
-reach 25.2%. Federated, the same fleet reaches **84.7%** against a centralized ceiling of 89.9% —
-recovering 94% of what pooling all the data would give, while **no raw sensor data ever leaves a
-vehicle**. That is the system's reason to exist, and it works.
+**Run-to-run noise is about 2.5 points — read everything below against it.** The same
+configuration, same seed and same code reproduces round 1 to four decimal places, but
+floating-point differences of ~10⁻⁴ in the first update compound over 60 rounds: two runs of the
+proposed arm finished at 84.67% and 82.17%. Any gap smaller than that between arms is not
+evidence of a ranking. Measuring it properly needs several seeds per arm, which has not been done.
 
-**The proposed framework wins on accuracy and communication, and loses on the tail:**
+**Collaboration is worth 57 accuracy points.** Vehicles training alone on their own Non-IID shards
+reach 25.2%. Federated, the same fleet reaches **82.2%** against a centralized ceiling of 89.9% —
+91% of what pooling all the data would give, while **no raw sensor data ever leaves a vehicle**.
+That gap is far outside the noise, and it is the system's reason to exist.
+
+**Against standard FedAvg, the proposed framework is clearly cheaper and otherwise roughly level:**
 
 | | Std. FedAvg | Proposed | |
 |---|---|---|---|
-| Accuracy, best round | 83.00% | **84.67%** | +1.7 pts |
-| Accuracy, last-10 mean | 80.09% | **82.94%** | +2.9 pts |
-| Rounds to 83% | 38 | **34** | 11% faster |
-| Rounds to 75% / 80% | 28 / 28 | 28 / 28 | tie |
-| Cross-client std (Non-IID) | **0.1304** | 0.1369 | **worse** |
-| Worst-served vehicle | **46.3%** | 32.7% | **13.6 pts worse** |
-| MB/round | 74.56 | **8.72** | **88% less** |
+| Accuracy, best round | 81.50% | 82.17% | +0.7 pts (within noise) |
+| Accuracy, last-10 mean | 79.53% | 81.33% | +1.8 pts (within noise) |
+| Rounds to 80% / 81% | 38 / 51 | 34 / 37 | faster, single seed |
+| Cross-client std (Non-IID) | 0.1379 | 0.1328 | slightly lower |
+| Worst-served vehicle | 32.7% | 40.8% | +8.2 pts |
+| Vehicles better / worse / unchanged | | 20 / 17 / 13 | of 50 |
+| MB/round | 74.56 | **8.71** | **88% less** |
 
-**Three PRD 12.3 criteria still fail. Stated plainly:**
+The 88% communication saving is the one robust win. Accuracy and fairness move in the proposed
+arm's favour in this run, but by amounts the previous run of the same arm did not reproduce: that
+run had the worst-served vehicle 13.6 points *below* FedAvg's. Treat the tail result as open.
+
+**What the per-vehicle data shows.** The four vehicles with uncalibrated sensors include the
+three worst-served cars in the fleet (40.8%, 47.3%, 53.7%; mean 53.0% against 80.3% for the 46
+calibrated vehicles). Car 26 never contributed an update: its V2I uptime (45%) sits below the
+selection threshold, the fairness rule picked it once, and that upload dropped — yet the shared
+model still serves it at 64.2%. Both are visible per car in the dashboard's **Fleet** page.
+
+**Four PRD 12.3 criteria fail. Stated plainly:**
 
 1. **`accuracy_target` (≥ 90%) — a scale artefact, not an algorithm failure.** The centralized
    upper bound on this synthetic data is 89.9%, so *no* federated arm can clear an absolute 90%
    bar. The bar is calibrated to the PRD's data volume, not this generator's.
-2. **`convergence_speedup` (≥ 25% fewer rounds) — not reproduced.** The two arms tie at the
-   75% and 80% thresholds (28 rounds each); the proposed arm is 11% faster to 83%. Nothing
-   like the 25–30% the PRD predicts.
-3. **`non_iid_robustness` — fails.** Cross-client dispersion is 0.1369 against FedAvg's
-   0.1304, and the worst-served vehicle is 13.6 points worse (32.7% vs 46.3%).
-4. **`accuracy_vs_ceiling` (≥ 95% of centralized)** — 94.2%, just under.
+2. **`convergence_speedup` and `convergence_speedup_relative` — not reproduced.** Neither
+   federated arm reaches 90% or 85.4% (95% of the ceiling), so there is no rounds-to-target to
+   compare. At lower thresholds the arms trade places (FedAvg first to 60% and 75%, proposed
+   first to 70%, 80% and 81%).
+3. **`accuracy_vs_ceiling` (≥ 95% of centralized)** — 91.4%.
 
-`communication_saving`, `communication_budget` and `privacy` pass.
+`communication_saving`, `communication_budget`, `non_iid_robustness` and `privacy` pass;
+`non_iid_robustness` passes by 0.005, well inside the noise above.
 
-**The result that cuts against the framework, not buried.** The proposed arm raises the fleet
-*average* while making the fleet *tail* worse: cross-client dispersion is higher than FedAvg's
-(0.1369 vs 0.1304) and the worst-served vehicle drops 13.6 points (32.7% vs 46.3%). PRD 8.4
-specifies quality-aware weighting as the Non-IID robustness mechanism, and at fleet level it
-measurably is not — the isolated ablation shows it *does* cut dispersion by 31% on its own
-([below](#what-the-ablation-found--including-one-prd-requirement-that-is-actively-harmful)), so
-the regression comes from combining it with connectivity-aware selection, which by design sees
-poorly-connected vehicles less often. For a safety-relevant system the tail is arguably what
-matters more than the mean. `aggregation.q_min` and `selection.fairness_k` are the two levers,
-and neither has been tuned against a tail objective here.
+**Earlier versions of this table were wrong, and why.** Until this revision the FedAvg column came
+from code older than the commit that published it, and from a run in which another arm had
+already advanced the fleet's augmentation generators; the standard-FedAvg preset had also been
+silently applying the proposed arm's FedNova normalisation since that option was introduced.
+All three are fixed (`fedav/sim/baselines.py`, `Fleet.reset_augmentation`), and a test pins each.
 
 ### What the ablation found — including one PRD requirement that is actively harmful
 
@@ -532,9 +546,11 @@ wrong default. `aggregation.normalize_local_steps` stays on, so whenever `E_k` d
 aggregation is used. This is the one place the implementation knowingly departs from the PRD, and
 the evidence for it is committed.
 
+**The ablation predates two fixes.** These runs shared one fleet across arms before each arm's augmentation stream was rewound, and the FedAvg control inherited FedNova normalisation; both can shift each row by a few points. The ±12-point effects are large enough to survive that; the smaller ones should be re-measured.
+
 **Caveats that bound all of the above.** One seed, one synthetic dataset, ~7,700 training samples.
 Differences of a point or two sit inside run-to-run noise and should not be read as rankings; the
-88% communication reduction, the +59-point collaboration gain and the −12.2-point adaptive-epochs
+88% communication reduction, the +57-point collaboration gain and the −12.2-point adaptive-epochs
 regression are large enough to be robust. mAP@0.5 is low for every federated arm (0.08–0.09 against
 0.54 centralized): localisation is the first thing Non-IID averaging degrades, and it is the most
 useful signal here for future work.
@@ -649,10 +665,11 @@ Stated plainly, because a simulation that overstates itself is worse than no sim
 5. **One knowing deviation from the PRD.** FR-10 (adaptive local epochs) ships disabled because
    it measurably hurts — see section 9. It is implemented, configurable and tested, so enabling it
    is a one-line config change; the default reflects the evidence, not the spec.
-6. **Averaged robustness is not tail robustness.** The proposed arm raises mean accuracy but
-   widens cross-client dispersion (0.1369 vs 0.1304) and leaves the worst-served vehicle 13.6
-   points worse off than standard FedAvg. For a safety-relevant
-   system that trade may be unacceptable; `aggregation.q_min` bounds it.
+6. **Tail robustness is unsettled.** Across two runs of the same configuration the worst-served
+   vehicle went from 13.6 points below standard FedAvg to 8.2 points above it, so a single seed
+   cannot say whether the proposed arm helps or hurts the tail. The per-vehicle data does say who
+   the tail is: uncalibrated-sensor vehicles. For a safety-relevant system this needs multi-seed
+   measurement; `aggregation.q_min` and `selection.fairness_k` are the levers.
 7. **Simulation only.** `v1` is explicitly not an on-vehicle deployment (PRD 3.2).
 8. **Roadmap** (PRD 20): certified DP budgets, blockchain contribution auditing, 5G/V2X
    latency-aware scheduling, verifiable secret sharing to combine secure and robust aggregation.

@@ -1,0 +1,125 @@
+{
+ "note": "final_* = each vehicle's own locally trained model on its own test split",
+ "vehicles": [
+  {
+   "client_id": 0,
+   "final_accuracy": 0.75,
+   "final_balanced_accuracy": 0.39394,
+   "final_mAP50": 0.0404,
+   "final_ade": 0.11048,
+   "final_fde": 0.19017,
+   "final_loss": 1.33428,
+   "final_test_samples": 16
+  },
+  {
+   "client_id": 4,
+   "final_accuracy": 0.75,
+   "final_balanced_accuracy": 0.5,
+   "final_mAP50": 0.00794,
+   "final_ade": 0.26412,
+   "final_fde": 0.41058,
+   "final_loss": 1.26312,
+   "final_test_samples": 20
+  },
+  {
+   "client_id": 8,
+   "final_accuracy": 0.8,
+   "final_balanced_accuracy": 0.7,
+   "final_mAP50": 0.11111,
+   "final_ade": 0.23499,
+   "final_fde": 0.43437,
+   "final_loss": 1.09155,
+   "final_test_samples": 15
+  },
+  {
+   "client_id": 12,
+   "final_accuracy": 0.28125,
+   "final_balanced_accuracy": 0.26667,
+   "final_mAP50": 0.0,
+   "final_ade": 0.23496,
+   "final_fde": 0.28373,
+   "final_loss": 1.919,
+   "final_test_samples": 32
+  },
+  {
+   "client_id": 16,
+   "final_accuracy": 0.63636,
+   "final_balanced_accuracy": 0.16204,
+   "final_mAP50": 0.00028,
+   "final_ade": 0.36706,
+   "final_fde": 0.41098,
+   "final_loss": 1.5445,
+   "final_test_samples": 55
+  },
+  {
+   "client_id": 20,
+   "final_accuracy": 0.89286,
+   "final_balanced_accuracy": 0.64103,
+   "final_mAP50": 0.03147,
+   "final_ade": 0.27758,
+   "final_fde": 0.55853,
+   "final_loss": 0.43789,
+   "final_test_samples": 28
+  },
+  {
+   "client_id": 25,
+   "final_accuracy": 0.89286,
+   "final_balanced_accuracy": 0.63768,
+   "final_mAP50": 0.00435,
+   "final_ade": 0.06763,
+   "final_fde": 0.11084,
+   "final_loss": 0.36006,
+   "final_test_samples": 28
+  },
+  {
+   "client_id": 29,
+   "final_accuracy": 0.65,
+   "final_balanced_accuracy": 0.39778,
+   "final_mAP50": 0.025,
+   "final_ade": 0.39216,
+   "final_fde": 0.57411,
+   "final_loss": 1.70824,
+   "final_test_samples": 20
+  },
+  {
+   "client_id": 33,
+   "final_accuracy": 0.36842,
+   "final_balanced_accuracy": 0.2,
+   "final_mAP50": 0.0,
+   "final_ade": 0.16772,
+   "final_fde": 0.23476,
+   "final_loss": 2.01154,
+   "final_test_samples": 19
+  },
+  {
+   "client_id": 37,
+   "final_accuracy": 0.25,
+   "final_balanced_accuracy": 0.16667,
+   "final_mAP50": 0.0,
+   "final_ade": 0.38101,
+   "final_fde": 0.64779,
+   "final_loss": 2.30055,
+   "final_test_samples": 12
+  },
+  {
+   "client_id": 41,
+   "final_accuracy": 0.27778,
+   "final_balanced_accuracy": 0.19907,
+   "final_mAP50": 0.01562,
+   "final_ade": 0.21297,
+   "final_fde": 0.42759,
+   "final_loss": 3.36452,
+   "final_test_samples": 18
+  },
+  {
+   "client_id": 45,
+   "final_accuracy": 0.55102,
+   "final_balanced_accuracy": 0.16667,
+   "final_mAP50": 0.0,
+   "final_ade": 0.22019,
+   "final_fde": 0.24256,
+   "final_loss": 1.76297,
+   "final_test_samples": 49
+  }
+ ]
+}

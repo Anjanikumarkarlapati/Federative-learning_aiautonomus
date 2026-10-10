@@ -1,0 +1,505 @@
+{
+ "note": "final_* = the pooled-data model on each vehicle's own test split",
+ "vehicles": [
+  {
+   "client_id": 0,
+   "final_accuracy": 0.9375,
+   "final_balanced_accuracy": 0.75,
+   "final_mAP50": 0.66667,
+   "final_ade": 0.19444,
+   "final_fde": 0.32423,
+   "final_loss": 0.42583,
+   "final_test_samples": 16
+  },
+  {
+   "client_id": 1,
+   "final_accuracy": 0.80303,
+   "final_balanced_accuracy": 0.64227,
+   "final_mAP50": 0.37226,
+   "final_ade": 0.23938,
+   "final_fde": 0.35967,
+   "final_loss": 0.80066,
+   "final_test_samples": 66
+  },
+  {
+   "client_id": 2,
+   "final_accuracy": 0.97143,
+   "final_balanced_accuracy": 0.98413,
+   "final_mAP50": 0.74735,
+   "final_ade": 0.16182,
+   "final_fde": 0.30711,
+   "final_loss": 0.26936,
+   "final_test_samples": 35
+  },
+  {
+   "client_id": 3,
+   "final_accuracy": 1.0,
+   "final_balanced_accuracy": 1.0,
+   "final_mAP50": 0.84161,
+   "final_ade": 0.05612,
+   "final_fde": 0.09571,
+   "final_loss": 0.16015,
+   "final_test_samples": 26
+  },
+  {
+   "client_id": 4,
+   "final_accuracy": 0.7,
+   "final_balanced_accuracy": 0.65278,
+   "final_mAP50": 0.38889,
+   "final_ade": 0.20436,
+   "final_fde": 0.31995,
+   "final_loss": 0.9759,
+   "final_test_samples": 20
+  },
+  {
+   "client_id": 5,
+   "final_accuracy": 0.9,
+   "final_balanced_accuracy": 0.76,
+   "final_mAP50": 0.36,
+   "final_ade": 0.12043,
+   "final_fde": 0.15896,
+   "final_loss": 0.61015,
+   "final_test_samples": 20
+  },
+  {
+   "client_id": 6,
+   "final_accuracy": 0.93939,
+   "final_balanced_accuracy": 0.90476,
+   "final_mAP50": 0.68878,
+   "final_ade": 0.18909,
+   "final_fde": 0.24726,
+   "final_loss": 0.44033,
+   "final_test_samples": 33
+  },
+  {
+   "client_id": 7,
+   "final_accuracy": 1.0,
+   "final_balanced_accuracy": 1.0,
+   "final_mAP50": 0.77778,
+   "final_ade": 0.33432,
+   "final_fde": 0.58879,
+   "final_loss": 0.19662,
+   "final_test_samples": 11
+  },
+  {
+   "client_id": 8,
+   "final_accuracy": 1.0,
+   "final_balanced_accuracy": 1.0,
+   "final_mAP50": 0.75,
+   "final_ade": 0.13185,
+   "final_fde": 0.25511,
+   "final_loss": 0.1202,
+   "final_test_samples": 15
+  },
+  {
+   "client_id": 9,
+   "final_accuracy": 0.76923,
+   "final_balanced_accuracy": 0.6726,
+   "final_mAP50": 0.39737,
+   "final_ade": 0.21883,
+   "final_fde": 0.2808,
+   "final_loss": 0.90454,
+   "final_test_samples": 52
+  },
+  {
+   "client_id": 10,
+   "final_accuracy": 0.72222,
+   "final_balanced_accuracy": 0.55833,
+   "final_mAP50": 0.26708,
+   "final_ade": 0.24979,
+   "final_fde": 0.33309,
+   "final_loss": 0.98132,
+   "final_test_samples": 36
+  },
+  {
+   "client_id": 11,
+   "final_accuracy": 0.84615,
+   "final_balanced_accuracy": 0.68333,
+   "final_mAP50": 0.28452,
+   "final_ade": 0.26431,
+   "final_fde": 0.44928,
+   "final_loss": 0.7237,
+   "final_test_samples": 26
+  },
+  {
+   "client_id": 12,
+   "final_accuracy": 0.8125,
+   "final_balanced_accuracy": 0.65476,
+   "final_mAP50": 0.25893,
+   "final_ade": 0.29171,
+   "final_fde": 0.40361,
+   "final_loss": 0.86984,
+   "final_test_samples": 32
+  },
+  {
+   "client_id": 13,
+   "final_accuracy": 0.81081,
+   "final_balanced_accuracy": 0.86389,
+   "final_mAP50": 0.25909,
+   "final_ade": 0.21617,
+   "final_fde": 0.32039,
+   "final_loss": 0.80917,
+   "final_test_samples": 37
+  },
+  {
+   "client_id": 14,
+   "final_accuracy": 0.93548,
+   "final_balanced_accuracy": 0.90333,
+   "final_mAP50": 0.65333,
+   "final_ade": 0.17936,
+   "final_fde": 0.34273,
+   "final_loss": 0.21967,
+   "final_test_samples": 31
+  },
+  {
+   "client_id": 15,
+   "final_accuracy": 0.9,
+   "final_balanced_accuracy": 0.81481,
+   "final_mAP50": 0.58333,
+   "final_ade": 0.17913,
+   "final_fde": 0.30698,
+   "final_loss": 0.29155,
+   "final_test_samples": 30
+  },
+  {
+   "client_id": 16,
+   "final_accuracy": 0.50909,
+   "final_balanced_accuracy": 0.20833,
+   "final_mAP50": 0.05697,
+   "final_ade": 0.3895,
+   "final_fde": 0.45916,
+   "final_loss": 1.94905,
+   "final_test_samples": 55
+  },
+  {
+   "client_id": 17,
+   "final_accuracy": 0.71429,
+   "final_balanced_accuracy": 0.61333,
+   "final_mAP50": 0.275,
+   "final_ade": 0.20204,
+   "final_fde": 0.30215,
+   "final_loss": 0.96382,
+   "final_test_samples": 21
+  },
+  {
+   "client_id": 18,
+   "final_accuracy": 0.62857,
+   "final_balanced_accuracy": 0.625,
+   "final_mAP50": 0.31867,
+   "final_ade": 0.25187,
+   "final_fde": 0.36608,
+   "final_loss": 1.43473,
+   "final_test_samples": 35
+  },
+  {
+   "client_id": 19,
+   "final_accuracy": 0.89474,
+   "final_balanced_accuracy": 0.90303,
+   "final_mAP50": 0.75455,
+   "final_ade": 0.06145,
+   "final_fde": 0.10455,
+   "final_loss": 0.21335,
+   "final_test_samples": 19
+  },
+  {
+   "client_id": 20,
+   "final_accuracy": 0.92857,
+   "final_balanced_accuracy": 0.97436,
+   "final_mAP50": 0.87495,
+   "final_ade": 0.31469,
+   "final_fde": 0.61258,
+   "final_loss": 0.38347,
+   "final_test_samples": 28
+  },
+  {
+   "client_id": 21,
+   "final_accuracy": 0.58537,
+   "final_balanced_accuracy": 0.3627,
+   "final_mAP50": 0.03226,
+   "final_ade": 0.44133,
+   "final_fde": 0.56646,
+   "final_loss": 1.66114,
+   "final_test_samples": 41
+  },
+  {
+   "client_id": 22,
+   "final_accuracy": 0.86364,
+   "final_balanced_accuracy": 0.952,
+   "final_mAP50": 0.70535,
+   "final_ade": 0.25013,
+   "final_fde": 0.43884,
+   "final_loss": 0.31352,
+   "final_test_samples": 44
+  },
+  {
+   "client_id": 23,
+   "final_accuracy": 0.64,
+   "final_balanced_accuracy": 0.67083,
+   "final_mAP50": 0.43036,
+   "final_ade": 0.28579,
+   "final_fde": 0.40176,
+   "final_loss": 1.35107,
+   "final_test_samples": 25
+  },
+  {
+   "client_id": 24,
+   "final_accuracy": 0.8,
+   "final_balanced_accuracy": 0.6,
+   "final_mAP50": 0.375,
+   "final_ade": 0.25794,
+   "final_fde": 0.38786,
+   "final_loss": 0.68948,
+   "final_test_samples": 15
+  },
+  {
+   "client_id": 25,
+   "final_accuracy": 1.0,
+   "final_balanced_accuracy": 1.0,
+   "final_mAP50": 0.22451,
+   "final_ade": 0.07706,
+   "final_fde": 0.13416,
+   "final_loss": 0.13407,
+   "final_test_samples": 28
+  },
+  {
+   "client_id": 26,
+   "final_accuracy": 0.77358,
+   "final_balanced_accuracy": 0.42323,
+   "final_mAP50": 0.15262,
+   "final_ade": 0.18605,
+   "final_fde": 0.28653,
+   "final_loss": 0.77998,
+   "final_test_samples": 53
+  },
+  {
+   "client_id": 27,
+   "final_accuracy": 0.76667,
+   "final_balanced_accuracy": 0.60737,
+   "final_mAP50": 0.51288,
+   "final_ade": 0.15178,
+   "final_fde": 0.23267,
+   "final_loss": 0.99412,
+   "final_test_samples": 30
+  },
+  {
+   "client_id": 28,
+   "final_accuracy": 0.74074,
+   "final_balanced_accuracy": 0.5,
+   "final_mAP50": 0.26389,
+   "final_ade": 0.43619,
+   "final_fde": 0.53322,
+   "final_loss": 1.24919,
+   "final_test_samples": 27
+  },
+  {
+   "client_id": 29,
+   "final_accuracy": 0.7,
+   "final_balanced_accuracy": 0.42778,
+   "final_mAP50": 0.25,
+   "final_ade": 0.32181,
+   "final_fde": 0.45672,
+   "final_loss": 1.07302,
+   "final_test_samples": 20
+  },
+  {
+   "client_id": 30,
+   "final_accuracy": 0.79545,
+   "final_balanced_accuracy": 0.30139,
+   "final_mAP50": 0.28194,
+   "final_ade": 0.24891,
+   "final_fde": 0.36229,
+   "final_loss": 0.84593,
+   "final_test_samples": 44
+  },
+  {
+   "client_id": 31,
+   "final_accuracy": 0.95455,
+   "final_balanced_accuracy": 0.83333,
+   "final_mAP50": 0.64912,
+   "final_ade": 0.25429,
+   "final_fde": 0.44886,
+   "final_loss": 0.34967,
+   "final_test_samples": 22
+  },
+  {
+   "client_id": 32,
+   "final_accuracy": 0.73333,
+   "final_balanced_accuracy": 0.60101,
+   "final_mAP50": 0.25509,
+   "final_ade": 0.18592,
+   "final_fde": 0.29504,
+   "final_loss": 1.05261,
+   "final_test_samples": 30
+  },
+  {
+   "client_id": 33,
+   "final_accuracy": 0.84211,
+   "final_balanced_accuracy": 0.77143,
+   "final_mAP50": 0.24444,
+   "final_ade": 0.17877,
+   "final_fde": 0.25269,
+   "final_loss": 0.52181,
+   "final_test_samples": 19
+  },
+  {
+   "client_id": 34,
+   "final_accuracy": 0.78571,
+   "final_balanced_accuracy": 0.69833,
+   "final_mAP50": 0.43476,
+   "final_ade": 0.34307,
+   "final_fde": 0.56727,
+   "final_loss": 0.93066,
+   "final_test_samples": 42
+  },
+  {
+   "client_id": 35,
+   "final_accuracy": 0.72727,
+   "final_balanced_accuracy": 0.84286,
+   "final_mAP50": 0.53413,
+   "final_ade": 0.20925,
+   "final_fde": 0.34505,
+   "final_loss": 0.75876,
+   "final_test_samples": 44
+  },
+  {
+   "client_id": 36,
+   "final_accuracy": 0.84211,
+   "final_balanced_accuracy": 0.78559,
+   "final_mAP50": 0.49699,
+   "final_ade": 0.17179,
+   "final_fde": 0.27618,
+   "final_loss": 0.61685,
+   "final_test_samples": 57
+  },
+  {
+   "client_id": 37,
+   "final_accuracy": 1.0,
+   "final_balanced_accuracy": 1.0,
+   "final_mAP50": 0.8,
+   "final_ade": 0.20526,
+   "final_fde": 0.36089,
+   "final_loss": 0.15441,
+   "final_test_samples": 12
+  },
+  {
+   "client_id": 38,
+   "final_accuracy": 0.89286,
+   "final_balanced_accuracy": 0.87778,
+   "final_mAP50": 0.67733,
+   "final_ade": 0.24673,
+   "final_fde": 0.4624,
+   "final_loss": 0.59409,
+   "final_test_samples": 28
+  },
+  {
+   "client_id": 39,
+   "final_accuracy": 0.77647,
+   "final_balanced_accuracy": 0.27677,
+   "final_mAP50": 0.23916,
+   "final_ade": 0.21719,
+   "final_fde": 0.29433,
+   "final_loss": 0.91539,
+   "final_test_samples": 85
+  },
+  {
+   "client_id": 40,
+   "final_accuracy": 1.0,
+   "final_balanced_accuracy": 1.0,
+   "final_mAP50": 0.66667,
+   "final_ade": 0.2222,
+   "final_fde": 0.39144,
+   "final_loss": 0.1552,
+   "final_test_samples": 17
+  },
+  {
+   "client_id": 41,
+   "final_accuracy": 1.0,
+   "final_balanced_accuracy": 1.0,
+   "final_mAP50": 0.6875,
+   "final_ade": 0.11672,
+   "final_fde": 0.23,
+   "final_loss": 0.34684,
+   "final_test_samples": 18
+  },
+  {
+   "client_id": 42,
+   "final_accuracy": 0.86111,
+   "final_balanced_accuracy": 0.85682,
+   "final_mAP50": 0.53038,
+   "final_ade": 0.16944,
+   "final_fde": 0.24176,
+   "final_loss": 0.52787,
+   "final_test_samples": 72
+  },
+  {
+   "client_id": 43,
+   "final_accuracy": 0.85714,
+   "final_balanced_accuracy": 0.94565,
+   "final_mAP50": 0.57401,
+   "final_ade": 0.14576,
+   "final_fde": 0.2555,
+   "final_loss": 0.45878,
+   "final_test_samples": 35
+  },
+  {
+   "client_id": 44,
+   "final_accuracy": 0.72414,
+   "final_balanced_accuracy": 0.48333,
+   "final_mAP50": 0.39259,
+   "final_ade": 0.3774,
+   "final_fde": 0.6408,
+   "final_loss": 1.05285,
+   "final_test_samples": 29
+  },
+  {
+   "client_id": 45,
+   "final_accuracy": 0.53061,
+   "final_balanced_accuracy": 0.34802,
+   "final_mAP50": 0.08693,
+   "final_ade": 0.2831,
+   "final_fde": 0.35547,
+   "final_loss": 1.70653,
+   "final_test_samples": 49
+  },
+  {
+   "client_id": 46,
+   "final_accuracy": 0.68182,
+   "final_balanced_accuracy": 0.47436,
+   "final_mAP50": 0.225,
+   "final_ade": 0.26276,
+   "final_fde": 0.31655,
+   "final_loss": 1.17679,
+   "final_test_samples": 22
+  },
+  {
+   "client_id": 47,
+   "final_accuracy": 0.91667,
+   "final_balanced_accuracy": 0.96,
+   "final_mAP50": 0.64286,
+   "final_ade": 0.15879,
+   "final_fde": 0.23077,
+   "final_loss": 0.36553,
+   "final_test_samples": 24
+  },
+  {
+   "client_id": 48,
+   "final_accuracy": 0.83721,
+   "final_balanced_accuracy": 0.48824,
+   "final_mAP50": 0.41077,
+   "final_ade": 0.19638,
+   "final_fde": 0.33498,
+   "final_loss": 0.61756,
+   "final_test_samples": 43
+  },
+  {
+   "client_id": 49,
+   "final_accuracy": 0.97059,
+   "final_balanced_accuracy": 0.9875,
+   "final_mAP50": 0.18863,
+   "final_ade": 0.08858,
+   "final_fde": 0.15395,
+   "final_loss": 0.23565,
+   "final_test_samples": 34
+  }
+ ]
+}

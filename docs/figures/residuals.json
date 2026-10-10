@@ -127,16 +127,16 @@
   "learning_curves": {
     "final_round_pct": {
       "centralized": 88.17,
-      "proposed_fl": 83.06,
-      "std_fedavg": 80.67,
+      "proposed_fl": 81.72,
+      "std_fedavg": 80.0,
       "local_only": 25.19
     },
     "best_round_pct": {
       "centralized": 89.89,
-      "proposed_fl": 84.67,
-      "std_fedavg": 83.0
+      "proposed_fl": 82.17,
+      "std_fedavg": 81.5
     },
-    "collaboration_gain_pts": 59.48
+    "collaboration_gain_pts": 56.98
   },
   "ablation": {
     "fedavg_control_accuracy": 70.78,
@@ -152,11 +152,11 @@
     "tolerance": 0.001,
     "per_arm": {
       "proposed_fl": {
-        "first": 0.55748,
-        "last": 0.02549
+        "first": 0.55727,
+        "last": 0.02576
       },
       "std_fedavg": {
-        "first": 0.69131,
+        "first": 0.62801,
         "last": 0.0
       }
     },
@@ -164,12 +164,12 @@
   },
   "cost_of_accuracy": {
     "Standard FedAvg": {
-      "mb_per_round": 74.561,
-      "accuracy_pct": 83.0
+      "mb_per_round": 74.564,
+      "accuracy_pct": 81.5
     },
     "Proposed FL": {
-      "mb_per_round": 8.722,
-      "accuracy_pct": 84.67
+      "mb_per_round": 8.709,
+      "accuracy_pct": 82.17
     }
   }
 }
