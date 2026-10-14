@@ -145,3 +145,23 @@ def test_arm_result_does_not_depend_on_earlier_arms(tmp_path):
     second = run_experiment(cfg.merged({"name": "b"}), fleet, echo=False).history[0]
     for key in ("accuracy", "loss", "delta_norm"):
         assert first[key] == second[key]
+
+
+# ------------------------------------------------------------------ the app itself
+
+APP_PAGES = ["Overview", "Fleet (every vehicle)", "Benchmark", "Ablation",
+             "Launch a run", "Run explorer", "Validation"]
+
+
+@pytest.mark.parametrize("page", APP_PAGES)
+def test_every_dashboard_page_renders(page):
+    """Each page runs end to end on the committed results without raising -
+    catches Streamlit API drift (e.g. arguments an installed version lacks)."""
+    testing = pytest.importorskip("streamlit.testing.v1")
+    pytest.importorskip("plotly")
+    at = testing.AppTest.from_file(os.path.join(data.REPO_ROOT, "dashboard", "app.py"),
+                                   default_timeout=120)
+    at.run()
+    at.sidebar.radio[0].set_value(page).run()
+    assert not at.exception, [e.message for e in at.exception]
+    assert not at.error, [e.value for e in at.error]

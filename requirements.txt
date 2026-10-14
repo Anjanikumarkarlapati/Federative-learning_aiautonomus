@@ -17,6 +17,6 @@ pytest>=7.4
 # opacus>=1.4
 
 # Dashboard (streamlit run dashboard/app.py)
-streamlit>=1.40
+streamlit>=1.52   # st.metric(delta_arrow=...) and width="stretch" need 1.52+
 plotly>=5.18
 pandas>=2.0
