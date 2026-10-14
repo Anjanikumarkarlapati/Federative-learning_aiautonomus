@@ -24,6 +24,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from ..config import ModelConfig
+from ..data.scenes import COMMON_CLASSES
 from ..models.perception import multitask_loss
 
 BACKGROUND = 0
@@ -77,9 +78,12 @@ class EvalResult:
     loss: float = 0.0
     per_class_ap: Dict[int, float] = field(default_factory=dict)
     samples: int = 0
+    rare_class_accuracy: Optional[float] = None   # recall on rare-hazard classes, if present
 
     def as_dict(self) -> Dict[str, float]:
-        return {
+        out = {} if self.rare_class_accuracy is None else {
+            "rare_class_accuracy": round(self.rare_class_accuracy, 5)}
+        return {**out,
             "accuracy": round(self.accuracy, 5),
             "balanced_accuracy": round(self.balanced_accuracy, 5),
             "macro_f1": round(self.macro_f1, 5),
@@ -159,7 +163,13 @@ def evaluate(model: nn.Module, loader: DataLoader, cfg: ModelConfig,
             recalls.append(recall)
         f1s.append(0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall))
 
+    # rare hazards (classes >= COMMON_CLASSES): pooled recall over their samples
+    rare_support = int(confusion[COMMON_CLASSES:].sum()) if num_classes > COMMON_CLASSES else 0
+    rare_acc = (float(np.trace(confusion[COMMON_CLASSES:, COMMON_CLASSES:])) / rare_support
+                if rare_support else None)
+
     return EvalResult(
+        rare_class_accuracy=rare_acc,
         accuracy=correct / max(total, 1),
         balanced_accuracy=float(np.mean(recalls)) if recalls else 0.0,
         macro_f1=float(np.mean(f1s)) if f1s else 0.0,

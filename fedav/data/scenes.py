@@ -28,7 +28,11 @@ from typing import Dict, Tuple
 
 import numpy as np
 
-CLASS_NAMES = ("background", "car", "truck", "pedestrian", "cyclist", "traffic_sign")
+CLASS_NAMES = ("background", "car", "truck", "pedestrian", "cyclist", "traffic_sign",
+               # rare road hazards, used when data.num_classes = 9
+               "construction_cone", "emergency_vehicle", "road_debris")
+COMMON_CLASSES = 6
+RARE_CLASSES = (6, 7, 8)
 REGIONS = ("urban", "highway", "rural")
 WEATHERS = ("clear", "rain", "fog", "night")
 
@@ -40,6 +44,9 @@ CLASS_SHAPE: Dict[str, Tuple[float, float, float]] = {
     "pedestrian":   (0.30, 0.12, 0.10),
     "cyclist":      (0.26, 0.18, 0.25),
     "traffic_sign": (0.18, 0.16, 0.00),
+    "construction_cone": (0.16, 0.08, 0.00),
+    "emergency_vehicle": (0.26, 0.38, 0.80),
+    "road_debris":       (0.07, 0.20, 0.00),
 }
 # Appearance is deliberately *not* a giveaway: the palette is tight and every
 # sample jitters its colour, so class identity has to come from shape, size and
@@ -52,6 +59,9 @@ CLASS_COLOR: Dict[str, Tuple[float, float, float]] = {
     "pedestrian":   (0.68, 0.64, 0.42),
     "cyclist":      (0.44, 0.62, 0.52),
     "traffic_sign": (0.68, 0.54, 0.40),
+    "construction_cone": (0.70, 0.50, 0.36),
+    "emergency_vehicle": (0.60, 0.44, 0.52),
+    "road_debris":       (0.48, 0.44, 0.40),
 }
 COLOR_JITTER = 0.16
 REGION_SPEED = {"urban": 0.55, "highway": 1.25, "rural": 0.85}
@@ -206,7 +216,8 @@ def generate_samples(n: int, class_probs: np.ndarray, ctx: SceneContext,
     """Generate ``n`` scenes whose class mixture follows ``class_probs``."""
     probs = np.asarray(class_probs, dtype=np.float64)
     probs = probs / probs.sum()
-    labels = rng.choice(len(CLASS_NAMES), size=n, p=probs)
+    num_classes = len(probs)               # 6, or 9 with the rare hazards
+    labels = rng.choice(num_classes, size=n, p=probs)
     images = np.empty((n, 3, size, size), dtype=np.float32)
     boxes = np.empty((n, 4), dtype=np.float32)
     trajs = np.empty((n, 2 * horizon), dtype=np.float32)
@@ -217,7 +228,7 @@ def generate_samples(n: int, class_probs: np.ndarray, ctx: SceneContext,
     if ctx.label_noise > 0:
         flip = rng.random(n) < ctx.label_noise
         labels = labels.copy()
-        labels[flip] = rng.integers(0, len(CLASS_NAMES), size=int(flip.sum()))
+        labels[flip] = rng.integers(0, num_classes, size=int(flip.sum()))
         boxes[flip] += rng.normal(0, 0.12, (int(flip.sum()), 4)).astype(np.float32)
         trajs[flip] += rng.normal(0, 0.6, (int(flip.sum()), trajs.shape[1])).astype(np.float32)
         boxes = np.clip(boxes, 0.01, 0.99)

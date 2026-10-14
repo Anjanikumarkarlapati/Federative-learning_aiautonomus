@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
@@ -25,7 +25,7 @@ from torch import nn
 
 from ..config import FLConfig
 from ..data.federated import Vehicle
-from ..data.quality import compute_quality_weight
+from ..data.quality import compute_quality_weight, compute_vehicle_quality
 from ..models.perception import multitask_loss
 from ..privacy.dp import add_gaussian_noise, clip_state
 from ..utils.seeding import derive_seed
@@ -51,6 +51,7 @@ class ClientUpdate:
     clipped: bool = False
     duration_s: float = 0.0
     byzantine: bool = False
+    delta_c: Optional[StateDict] = None     # SCAFFOLD control-variate change, if enabled
 
     def meta(self) -> Dict[str, Any]:
         return {
@@ -72,6 +73,25 @@ class ClientTrainer:
         self.cfg = cfg
         self.model = model
         self.device = torch.device(device)
+        # SCAFFOLD (Karimireddy et al. 2020): server control c and per-vehicle
+        # c_k over the trainable parameters. c_k lives on the vehicle.
+        self.c_global: Optional[Dict[str, torch.Tensor]] = None
+        self.c_local: Dict[int, Dict[str, torch.Tensor]] = {}
+
+    def _scaffold_controls(self, client_id: int):
+        names = [n for n, p in self.model.named_parameters() if p.requires_grad]
+        if self.c_global is None:
+            self.c_global = {n: torch.zeros_like(p, device="cpu")
+                             for n, p in self.model.named_parameters() if p.requires_grad}
+        c_k = self.c_local.get(client_id) or {n: torch.zeros_like(self.c_global[n]) for n in names}
+        return names, c_k
+
+    def scaffold_server_update(self, delta_cs: List[StateDict], num_clients: int) -> None:
+        """c <- c + (1/N) sum_{k in S} delta c_k."""
+        if self.c_global is None or not delta_cs:
+            return
+        for n in self.c_global:
+            self.c_global[n] += sum(d[n] for d in delta_cs) / float(max(num_clients, 1))
 
     # ------------------------------------------------------------- scheduling
     def local_epochs_for(self, vehicle: Vehicle) -> int:
@@ -94,6 +114,11 @@ class ClientTrainer:
     def quality_weight(self, vehicle: Vehicle, reference_histogram: np.ndarray) -> float:
         """q_k computed on-vehicle; only this scalar is transmitted (PRD 8.4/8.6)."""
         agg = self.cfg.aggregation
+        if agg.quality_score == "kst":
+            return compute_vehicle_quality(
+                **vehicle.kst_inputs(), histogram=vehicle.profile.label_histogram,
+                prior=reference_histogram, q_min=agg.q_min, q_max=agg.q_max,
+                rarity_strength=agg.kst_rarity_strength)
         return compute_quality_weight(
             vehicle.profile.label_histogram,
             reference_histogram,
@@ -122,6 +147,11 @@ class ClientTrainer:
             self.model.parameters(), lr=lr, momentum=cfg.train.momentum,
             weight_decay=cfg.train.weight_decay,
         )
+        scaffold = cfg.train.scaffold
+        if scaffold:
+            sc_names, c_k = self._scaffold_controls(vehicle.client_id)
+            correction = {n: (self.c_global[n] - c_k[n]).to(self.device) for n in sc_names}
+            sc_params = dict(self.model.named_parameters())
         epochs = self.local_epochs_for(vehicle)
         loader = vehicle.loader(cfg.train.batch_size,
                                 seed=derive_seed(round_id, vehicle.client_id, 7, base=cfg.seed))
@@ -143,6 +173,10 @@ class ClientTrainer:
                                for p, ref in zip(self.model.parameters(), prox_ref))
                     loss = loss + 0.5 * cfg.train.fedprox_mu * prox
                 loss.backward()
+                if scaffold:                                # g <- g - c_k + c
+                    for n in sc_names:
+                        if sc_params[n].grad is not None:
+                            sc_params[n].grad.add_(correction[n])
                 if cfg.train.grad_clip > 0:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), cfg.train.grad_clip)
                 optimizer.step()
@@ -154,6 +188,15 @@ class ClientTrainer:
 
         local_state = to_float_state(self.model.state_dict())
         delta = state_sub(local_state, anchor)              # dW transmitted, not w
+        delta_c = None
+        if scaffold and steps > 0:
+            # option II: c_k+ = c_k - c + (x - y_k) / (K * eta_eff); with client
+            # momentum beta the per-step displacement is ~ eta / (1 - beta)
+            eta_eff = lr / max(1.0 - cfg.train.momentum, 1e-3)
+            new_c = {n: c_k[n] - self.c_global[n] - delta[n].cpu() / (steps * eta_eff)
+                     for n in sc_names}
+            delta_c = {n: new_c[n] - c_k[n] for n in sc_names}
+            self.c_local[vehicle.client_id] = new_c
         if vehicle.profile.byzantine:
             delta = self._poison(delta, round_id, vehicle.client_id)
 
@@ -186,6 +229,7 @@ class ClientTrainer:
             clipped=clipped,
             duration_s=float(max(simulated, wall * 0.0)),
             byzantine=vehicle.profile.byzantine,
+            delta_c=delta_c,
         )
 
     # ------------------------------------------------------------- adversary

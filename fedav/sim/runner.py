@@ -205,8 +205,11 @@ class SimRunner:
                 stats["straggler"] += 1            # PRD 16: past the round window
                 events[client_id] = {"status": "straggler", **event}
                 continue
-            payload = self.compressor.compress(client_id, update.delta)
-            sent = payload
+            ef_norm = self.cfg.comm.ef_normalize_steps
+            payload = self.compressor.compress(
+                client_id, update.delta, steps=update.steps, normalize=ef_norm,
+                fp16=self.cfg.comm.ef_quantization and self.cfg.comm.fp16)
+            sent, sent_steps = payload, (update.steps if ef_norm else 1.0)
             if not self.cfg.comm.send_deltas:
                 # Classic FedAvg puts the full local weights on the wire; the
                 # server differences them against w^(r) to recover the update.
@@ -224,7 +227,7 @@ class SimRunner:
             if not delivered:
                 stats["dropped"] += 1              # PRD 16: client drops mid-round
                 events[client_id] = {"status": "dropped", **event}
-                self._nack(client_id, sent)
+                self._nack(client_id, sent, sent_steps)
                 continue
             blob = self._maybe_corrupt(blob, round_id, client_id)
             try:
@@ -234,7 +237,7 @@ class SimRunner:
             except ChecksumError:
                 stats["corrupt"] += 1
                 events[client_id] = {"status": "corrupt", **event}
-                self._nack(client_id, sent)
+                self._nack(client_id, sent, sent_steps)
                 continue
             events[client_id] = {"status": "reported", "uplink_kb": round(len(blob) / 1024, 2),
                                  **event}
@@ -422,10 +425,10 @@ class SimRunner:
         self._value_bound = max(4.0 * w_max * float(np.max(np.abs(d_support))), 1e-6)
         return out
 
-    def _nack(self, client_id: int, sent: StateDict) -> None:
+    def _nack(self, client_id: int, sent: StateDict, steps: float = 1.0) -> None:
         if (self.cfg.comm.nack_retention and self.cfg.comm.send_deltas
                 and self.compressor.ratio < 1.0 and self.compressor.error_feedback):
-            self.compressor.restore(client_id, sent)
+            self.compressor.restore(client_id, sent, steps)
 
     def _maybe_corrupt(self, blob: bytes, round_id: int, client_id: int) -> bytes:
         """Fault injection: flip one byte with probability ``comm.corrupt_prob``."""
@@ -529,6 +532,12 @@ class SimRunner:
                 previous_state, aggregated, alphas,
                 [u.client_id for u in contributed], rejected,
             )
+            if cfg.train.scaffold:
+                # delta c_k rides the uplink next to the update: count its bytes
+                delta_cs = [u.delta_c for u in raw_updates if u.delta_c is not None]
+                for dc in delta_cs:
+                    self.channel.stats.uplink_bytes += len(self.serializer.pack(dc, {}))
+                self.trainer.scaffold_server_update(delta_cs, len(self.fleet))
             if secure_round:     # every vehicle derives next round's support from this
                 self._prev_update = flatten(state_sub(self.global_state, previous_state),
                                             list(self.global_state.keys())).double().numpy()

@@ -184,13 +184,19 @@ class AVPerceptionNet(nn.Module):
 def multitask_loss(outputs: Dict[str, Tensor], labels: Tensor, boxes: Tensor,
                    trajectories: Tensor, cfg: ModelConfig,
                    background_index: int = 0) -> Tuple[Tensor, Dict[str, float]]:
-    """L = CE(class) + lambda_box * SmoothL1(box) + lambda_traj * SmoothL1(traj).
+    """L = CE(class) [or focal CE] + lambda_box * SmoothL1(box) + lambda_traj * SmoothL1(traj).
 
     Box and trajectory terms are masked on background samples: there is no
     object to localise or to predict a path for, so regressing them would inject
     pure noise into the shared representation.
     """
-    cls_loss = F.cross_entropy(outputs["logits"], labels)
+    if cfg.focal_gamma > 0:
+        # focal cross-entropy: (1 - p_t)^gamma down-weights the easy, frequent
+        # classes so gradient mass shifts to rare and hard samples
+        ce = F.cross_entropy(outputs["logits"], labels, reduction="none")
+        cls_loss = ((1.0 - torch.exp(-ce)) ** cfg.focal_gamma * ce).mean()
+    else:
+        cls_loss = F.cross_entropy(outputs["logits"], labels)
     foreground = (labels != background_index)
     if foreground.any():
         pred_box = outputs["box"][foreground]

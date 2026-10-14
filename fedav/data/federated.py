@@ -22,7 +22,8 @@ from torch.utils.data import DataLoader, Dataset
 
 from ..config import DataConfig, FLConfig
 from ..utils.seeding import rng as make_rng
-from .scenes import CLASS_NAMES, REGIONS, WEATHERS, SceneContext, generate_samples
+from .scenes import (CLASS_NAMES, COMMON_CLASSES, REGIONS, WEATHER_FX, WEATHERS, SceneContext,
+                     generate_samples)
 
 
 class SceneDataset(Dataset):
@@ -59,7 +60,7 @@ class SceneDataset(Dataset):
             image = (image * jitter).clamp(0.0, 1.0)
         return image, self.labels[idx], box, traj
 
-    def label_histogram(self, num_classes: int = len(CLASS_NAMES)) -> np.ndarray:
+    def label_histogram(self, num_classes: int = COMMON_CLASSES) -> np.ndarray:
         hist = np.bincount(self.labels.numpy(), minlength=num_classes).astype(np.float64)
         total = hist.sum()
         return hist / total if total > 0 else hist
@@ -78,7 +79,7 @@ class VehicleProfile:
     compute_capability: float      # relative onboard TOPS (1.0 = reference)
     quality_signal: float          # sensor-health score in [0, 1]
     byzantine: bool = False
-    label_histogram: np.ndarray = field(default_factory=lambda: np.zeros(len(CLASS_NAMES)))
+    label_histogram: np.ndarray = field(default_factory=lambda: np.zeros(COMMON_CLASSES))
 
 
 @dataclass
@@ -95,6 +96,34 @@ class Vehicle:
     @property
     def n_k(self) -> int:
         return len(self.train)
+
+    def kst_inputs(self, dt: float = 0.5, max_images: int = 64) -> Dict[str, float]:
+        """On-vehicle measurements for the KST quality score (cached).
+
+        * speed and yaw-rate variance from the recorded trajectories of moving
+          objects (ego-relative, as the perception stack logs them);
+        * image SNR in dB: variance of the recorded frames over the sensor's
+          noise floor (the read-noise sigma camera diagnostics report);
+        * occlusion rate and calibration flag from the sensor diagnostics.
+        """
+        cached = getattr(self, "_kst", None)
+        if cached is not None:
+            return cached
+        traj = self.train.trajectories.numpy().reshape(len(self.train), -1, 2)
+        fg = self.train.labels.numpy() != 0
+        pts = traj[fg] if fg.any() else traj
+        steps = np.diff(np.concatenate([np.zeros_like(pts[:, :1]), pts], axis=1), axis=1)
+        speed = float(np.linalg.norm(steps, axis=-1).mean() / dt) if len(pts) else 0.0
+        heading = np.arctan2(steps[..., 1], steps[..., 0])
+        yaw_rate = np.diff(np.unwrap(heading, axis=1), axis=1) / dt
+        yaw_var = float(np.var(yaw_rate.mean(axis=1))) if yaw_rate.size else 0.0
+        signal = float(np.var(self.train.images[:max_images].numpy()))
+        noise = WEATHER_FX[self.profile.weather][3] ** 2
+        ctx = SceneContext(weather=self.profile.weather, calibrated=self.profile.calibrated)
+        self._kst = {"mean_speed": speed, "yaw_rate_var": yaw_var,
+                     "snr_db": 10.0 * float(np.log10(max(signal, 1e-12) / noise)),
+                     "occlusion_rate": ctx.occlusion, "calibrated": self.profile.calibrated}
+        return self._kst
 
     def loader(self, batch_size: int, seed: int = 0, split: str = "train") -> DataLoader:
         dataset = {"train": self.train, "val": self.val, "test": self.test}[split]
@@ -165,6 +194,23 @@ def dirichlet_class_probs(num_clients: int, num_classes: int, alpha: float,
     return generator.dirichlet(np.full(num_classes, alpha), size=num_clients)
 
 
+def rare_hazard_probs(probs: np.ndarray, share: float,
+                      generator: np.random.Generator) -> np.ndarray:
+    """Make classes >= COMMON_CLASSES rare and concentrated on a few vehicles.
+
+    Each vehicle's rare-hazard share is ``share`` times a heavy-tailed
+    Gamma(0.5, 2) draw (mean 1), capped at 0.5: most vehicles almost never see a
+    hazard, a few "scouts" (work zones, emergency routes) see many. Within the
+    common and rare groups the Dirichlet label skew is kept.
+    """
+    out = probs.copy()
+    common, rare = out[:, :COMMON_CLASSES], out[:, COMMON_CLASSES:]
+    common = common / np.clip(common.sum(axis=1, keepdims=True), 1e-12, None)
+    rare = rare / np.clip(rare.sum(axis=1, keepdims=True), 1e-12, None)
+    k_share = np.clip(share * generator.gamma(0.5, 2.0, size=len(out)), 0.0, 0.5)
+    return np.concatenate([common * (1 - k_share)[:, None], rare * k_share[:, None]], axis=1)
+
+
 def quantity_skew_sizes(num_clients: int, mean: int, sigma: float,
                         generator: np.random.Generator, minimum: int = 40) -> np.ndarray:
     """Log-normal n_k with mean preserved (PRD 11.2, quantity skew)."""
@@ -196,6 +242,8 @@ def build_fleet(cfg: FLConfig, byzantine_ids: Optional[List[int]] = None) -> Fle
     generator = make_rng(cfg.seed, 0xF1EE7)
     num_classes = data.num_classes
     probs = dirichlet_class_probs(cfg.num_clients, num_classes, data.dirichlet_alpha, generator)
+    if num_classes > COMMON_CLASSES:
+        probs = rare_hazard_probs(probs, data.rare_hazard_share, make_rng(cfg.seed, 0x4A2D))
     sizes = quantity_skew_sizes(cfg.num_clients, data.samples_per_client,
                                 data.quantity_skew, generator)
     byz = set(byzantine_ids or [])

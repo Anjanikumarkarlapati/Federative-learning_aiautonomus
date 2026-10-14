@@ -69,6 +69,8 @@ class ClientSelector:
         target = min(self.target_size(), len(profiles))
         if cfg.mode == "uniform":
             return self._select_uniform(profiles, round_id, target)
+        if cfg.mode == "kst_ucb":
+            return self._select_kst_ucb(profiles, round_id, target)
         uptimes = {p.client_id: self._link_sample(p, round_id) for p in profiles}
 
         threshold, relaxed = cfg.uptime_threshold, False
@@ -130,6 +132,53 @@ class ClientSelector:
             self.last_seen[client_id] = round_id
             self.times_selected[client_id] += 1
         return SelectionResult(selected=chosen, eligible=len(profiles))
+
+    def _select_kst_ucb(self, profiles: Sequence[VehicleProfile], round_id: int,
+                        target: int) -> SelectionResult:
+        """Quality floor + UCB staleness exploration + rare-hazard scout reserve.
+
+        * Vehicles whose reported sensor health is below ``quality_floor`` are
+          excluded outright; link uptime is part of the score, not a gate (mud-occluded or faulty sensors). The floor uses the
+          sensor-health signal the vehicle already beacons, not q_k, which stays
+          hidden under secure aggregation.
+        * The remaining vehicles are ranked by the usual link/quality score plus
+          ``ucb_beta * sqrt(ln(t+1) / (N_k(t)+1))``, so a rarely chosen vehicle's
+          bonus grows until it is picked.
+        * ``rarity_reserve`` of the cohort goes first to the vehicles with the
+          highest rare-scene share (classes beyond the common six, or label
+          divergence from the fleet when there are none).
+        """
+        cfg = self.cfg
+        uptimes = {p.client_id: self._link_sample(p, round_id) for p in profiles}
+        # link uptime enters through the score, not as a gate, so the UCB term can
+        # always reach a weak-link vehicle eventually
+        eligible = [p for p in profiles if p.quality_signal >= cfg.quality_floor]
+        relaxed = len(eligible) < target
+        if relaxed:                                # never return a short cohort
+            eligible = list(profiles)
+
+        def ucb(p: VehicleProfile) -> float:
+            n = self.times_selected[p.client_id]
+            return self._score(p, uptimes[p.client_id]) + cfg.ucb_beta * math.sqrt(
+                math.log(round_id + 1) / (n + 1))
+
+        def rarity(p: VehicleProfile) -> float:
+            h = np.asarray(p.label_histogram, dtype=np.float64)
+            return float(h[6:].sum()) if h.size > 6 else 0.0
+
+        chosen: List[int] = []
+        reserve = int(round(cfg.rarity_reserve * target))
+        if reserve and any(rarity(p) > 0 for p in eligible):
+            # the 2x-reserve rarest vehicles form the scout pool; UCB rotates
+            # the reserved slots through it instead of always taking the rarest
+            pool = sorted(eligible, key=lambda p: -rarity(p))[:2 * reserve]
+            chosen = [p.client_id for p in sorted(pool, key=lambda p: -ucb(p))[:reserve]]
+        rest = sorted((p for p in eligible if p.client_id not in chosen), key=lambda p: -ucb(p))
+        chosen += [p.client_id for p in rest[:target - len(chosen)]]
+        for client_id in chosen:
+            self.last_seen[client_id] = round_id
+            self.times_selected[client_id] += 1
+        return SelectionResult(selected=sorted(chosen), eligible=len(eligible), relaxed=relaxed)
 
     def _score(self, profile: VehicleProfile, uptime: float) -> float:
         """Prefer stable links and larger, healthier shards; mild inverse-count

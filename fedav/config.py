@@ -16,7 +16,8 @@ from typing import Any, Dict, Optional
 class DataConfig:
     """Synthetic AV driving-scene generation + Non-IID partitioning (PRD 11)."""
 
-    num_classes: int = 6
+    num_classes: int = 6                  # 9 adds the rare hazards: cone, emergency vehicle, debris
+    rare_hazard_share: float = 0.06       # fleet-average share of rare-hazard samples (num_classes 9)
     image_size: int = 32
     traj_horizon: int = 6                 # future waypoints per agent
     samples_per_client: int = 220         # mean; quantity skew varies it
@@ -42,6 +43,7 @@ class ModelConfig:
     box_dim: int = 4                      # (cx, cy, w, h) normalised
     lambda_box: float = 1.0
     lambda_traj: float = 0.5
+    focal_gamma: float = 0.0              # > 0: focal cross-entropy (Lin et al. 2017)
     max_parameters: int = 6_000_000
 
 
@@ -60,7 +62,10 @@ class DPConfig:
 class SelectionConfig:
     """Connectivity / trajectory aware client selection (PRD 8.5)."""
 
-    mode: str = "aware"                   # "aware" (PRD 8.5) | "uniform" (McMahan FedAvg)
+    mode: str = "aware"                   # "aware" (PRD 8.5) | "uniform" (McMahan) | "kst_ucb"
+    quality_floor: float = 0.18           # kst_ucb: exclude vehicles whose sensor health is below
+    ucb_beta: float = 1.0                 # kst_ucb: staleness exploration weight
+    rarity_reserve: float = 0.25          # kst_ucb: share of the cohort kept for rare-hazard scouts
     fraction: float = 0.3                 # C
     uptime_threshold: float = 0.55        # minimum V2I link uptime to be eligible
     trajectory_aware: bool = True         # spread selection over regions
@@ -82,6 +87,11 @@ class AggregationConfig:
     q_min: float = 0.05                   # clamp for q_k (PRD 18: q_k mis-estimation)
     q_max: float = 1.0
     weight_cap: float = 4.0               # w_k = q_k n_k / n_ref is capped at q_max * weight_cap
+    quality_score: str = "hellinger"      # "hellinger" (sensor x label similarity) | "kst"
+    kst_rarity_strength: float = 0.5      # R_k = 1 + strength * min(KL / 1 nat, 1)
+    alpha_cap_ratio: float = 0.0          # > 0: project alpha onto the simplex with alpha_k <= ratio/|S|
+    norm_downweight: float = 0.0          # > 0: scale alpha_k by min(1, x * median norm / ||dW_k||)
+    nesterov: bool = False                # Nesterov form of the server momentum step
 
 
 @dataclass
@@ -104,7 +114,8 @@ class TrainConfig:
     fedprox_mu: float = 0.0               # mu; > 0 enables proximal term
     tolerance: float = 1e-3               # epsilon, ||w^{t+1} - w^t||
     target_accuracy: float = 0.90         # PRD 12.3 acceptance bar
-    grad_clip: float = 5.0
+    grad_clip: float = 5.0                # per-batch L2 clip on the gradient (checklist: 2.5)
+    scaffold: bool = False                # SCAFFOLD control variates (Karimireddy et al. 2020)
 
 
 @dataclass
@@ -125,6 +136,8 @@ class CommConfig:
     airtime_budget_s: float = 0.0         # > 0: secure-agg tiers share this uplink airtime
     tier_levels: int = 5                  # prefix lengths on the shared support
     corrupt_prob: float = 0.0             # per-upload probability of a corrupted payload
+    ef_normalize_steps: bool = False      # top-k path: u = dW/tau + e before sparsifying
+    ef_quantization: bool = False         # residual also absorbs the fp16 rounding error
 
 
 @dataclass

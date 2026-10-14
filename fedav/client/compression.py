@@ -36,18 +36,34 @@ class TopKCompressor:
     min_ratio: float = 0.02
     residuals: Dict[int, StateDict] = field(default_factory=dict)
 
-    def compress(self, client_id: int, update: StateDict) -> StateDict:
+    def compress(self, client_id: int, update: StateDict, steps: float = 1.0,
+                 normalize: bool = False, fp16: bool = False) -> StateDict:
+        """Top-k with error feedback.
+
+        ``normalize``: work in step-normalised units, ``u = dW / tau + e``, and
+        return ``tau * s`` so a FedNova aggregator that divides by ``tau`` sees
+        exactly ``s`` - without it the residual, built from rounds with
+        different ``tau``, is mis-scaled once the aggregator normalises.
+        ``fp16``: round the output to half precision here, so the residual also
+        carries the quantisation error and it is sent next round.
+        """
         if self.ratio >= 1.0:
             return update
+        tau = float(max(steps, 1.0)) if normalize else 1.0
+        if tau != 1.0:
+            update = {k: v / tau for k, v in update.items()}
         if self.error_feedback:
             residual = self.residuals.get(client_id)
             if residual is not None:
                 update = {k: v + residual[k] for k, v in update.items()}
         sparse, kept = self._top_k(update, max(self.ratio, self.min_ratio))
+        out = {k: v * tau for k, v in sparse.items()} if tau != 1.0 else sparse
+        if fp16:
+            out = {k: v.half().float() for k, v in out.items()}
         if self.error_feedback:
-            self.residuals[client_id] = {k: update[k] - sparse[k] for k in update}
+            self.residuals[client_id] = {k: update[k] - out[k] / tau for k in update}
         self.last_density = kept
-        return sparse
+        return out
 
     @staticmethod
     def _top_k(update: StateDict, ratio: float):
@@ -62,11 +78,14 @@ class TopKCompressor:
         density = float(sum(int((v != 0).sum()) for v in sparse.values())) / total
         return sparse, density
 
-    def restore(self, client_id: int, sent: StateDict) -> None:
+    def restore(self, client_id: int, sent: StateDict, steps: float = 1.0) -> None:
         """NACK: the upload never arrived, so its coordinates go back into the
-        residual instead of being lost - the next upload carries them."""
+        residual instead of being lost - the next upload carries them.
+        ``steps`` undoes the ``tau`` scaling of a step-normalised upload."""
+        tau = float(max(steps, 1.0))
+        sent = {k: v / tau for k, v in sent.items()} if tau != 1.0 else dict(sent)
         residual = self.residuals.get(client_id)
-        self.residuals[client_id] = (dict(sent) if residual is None
+        self.residuals[client_id] = (sent if residual is None
                                      else {k: residual[k] + sent[k] for k in residual})
 
     def clear(self, client_id: Optional[int] = None) -> None:

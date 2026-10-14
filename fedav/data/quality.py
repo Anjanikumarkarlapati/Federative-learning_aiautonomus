@@ -73,6 +73,59 @@ def compute_quality_weight(histogram: Sequence[float], reference: Sequence[float
     return float(np.clip(similarity * quality, q_min, q_max))
 
 
+# ------------------------------------------------ KST quality (optional score)
+def kl_divergence(p: Sequence[float], q: Sequence[float], eps: float = 1e-6) -> float:
+    """KL(p || q) in nats, with both distributions smoothed by ``eps``."""
+    p, q = _normalise(np.asarray(p) + eps), _normalise(np.asarray(q) + eps)
+    return float(np.sum(p * np.log(p / q)))
+
+
+def kinematic_novelty(mean_speed: float, yaw_rate_var: float, speed_ref: float = 0.25,
+                      yaw_ref: float = 0.1, floor: float = 0.2) -> float:
+    """K_k in [floor, 1]: a vehicle crawling in stationary traffic on a straight
+    road sees little new; speed and manoeuvring (yaw-rate variance) raise it."""
+    k = 0.6 * (1.0 - np.exp(-max(mean_speed, 0.0) / speed_ref)) \
+        + 0.4 * (1.0 - np.exp(-max(yaw_rate_var, 0.0) / yaw_ref))
+    return float(np.clip(k, floor, 1.0))
+
+
+def sensor_fidelity(snr_db: float, occlusion_rate: float, calibrated: bool = True,
+                    snr_mid: float = 6.0, snr_scale: float = 3.0) -> float:
+    """S_k in (0, 1]: logistic in image SNR (dB), times the unoccluded share,
+    times 0.55 for a de-calibrated sensor."""
+    s = 1.0 / (1.0 + np.exp(-(snr_db - snr_mid) / snr_scale))
+    s *= 1.0 - float(np.clip(occlusion_rate, 0.0, 1.0))
+    if not calibrated:
+        s *= 0.55
+    return float(np.clip(s, 0.02, 1.0))
+
+
+def rare_scene_bonus(histogram: Sequence[float], prior: Sequence[float],
+                     strength: float = 0.5, kl_ref: float = 1.0) -> float:
+    """R_k in [1, 1 + strength]: grows with KL(local labels || fleet prior), so a
+    vehicle that sees what the fleet rarely sees is not averaged away."""
+    return 1.0 + strength * min(kl_divergence(histogram, prior) / kl_ref, 1.0)
+
+
+def compute_vehicle_quality(mean_speed: float, yaw_rate_var: float, snr_db: float,
+                            occlusion_rate: float, calibrated: bool,
+                            histogram: Sequence[float], prior: Sequence[float],
+                            q_min: float = 0.05, q_max: float = 1.0,
+                            rarity_strength: float = 0.5) -> float:
+    """Kinematic-spatio-temporal quality q_k = K_k * S_k * R_k / (1 + strength).
+
+    Monotone: non-decreasing in speed, yaw-rate variance, SNR and label
+    divergence; non-increasing in occlusion. Every input is measured on the
+    vehicle; only q_k leaves it (inside the masked payload under secure
+    aggregation).
+    """
+    q = (kinematic_novelty(mean_speed, yaw_rate_var)
+         * sensor_fidelity(snr_db, occlusion_rate, calibrated)
+         * rare_scene_bonus(histogram, prior, rarity_strength)
+         / (1.0 + rarity_strength))
+    return float(np.clip(q, q_min, q_max))
+
+
 def aggregation_weights(n_k: Sequence[float], q_k: Optional[Sequence[float]] = None
                         ) -> np.ndarray:
     """alpha_k = q_k n_k / sum_j q_j n_j  (PRD 8.4); plain FedAvg when q is None.
@@ -91,4 +144,6 @@ def aggregation_weights(n_k: Sequence[float], q_k: Optional[Sequence[float]] = N
 
 
 __all__ = ["hellinger_distance", "jensen_shannon_distance", "similarity_score",
-           "compute_quality_weight", "aggregation_weights"]
+           "compute_quality_weight", "aggregation_weights", "kl_divergence",
+           "kinematic_novelty", "sensor_fidelity", "rare_scene_bonus",
+           "compute_vehicle_quality"]

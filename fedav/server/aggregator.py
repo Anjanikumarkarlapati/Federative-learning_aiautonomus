@@ -91,6 +91,14 @@ class FedAggregator:
             raise ValueError("no updates received this round")
         alphas = self.weights_for(updates)
         deltas = [u.delta for u in updates]
+        if self.cfg.norm_downweight > 0 and len(updates) >= 3:
+            norms = np.array([state_norm(d) for d in deltas])
+            limit = self.cfg.norm_downweight * float(np.median(norms))
+            if limit > 0:                       # all-zero updates: nothing to down-weight
+                alphas = alphas * np.minimum(1.0, limit / np.maximum(norms, 1e-12))
+                alphas = alphas / alphas.sum()
+        if self.cfg.alpha_cap_ratio > 0:
+            alphas = capped_simplex(alphas, self.cfg.alpha_cap_ratio / len(alphas))
 
         # FedNova: with heterogeneous tau_k a plain mean solves the wrong problem.
         scale = 1.0
@@ -122,11 +130,17 @@ class FedAggregator:
             self.momentum_buffer = {
                 key: beta * self.momentum_buffer[key] + aggregated[key] for key in aggregated
             }
-            # Convex blend of the momentum direction and the fresh aggregate keeps
-            # the effective step size comparable to plain FedAvg while inheriting
-            # the smoothed direction.
-            applied = {key: (1 - beta) * self.momentum_buffer[key] + beta * aggregated[key]
-                       for key in aggregated}
+            if self.cfg.nesterov:
+                # Nesterov look-ahead, damped by (1 - beta) so the step stays on
+                # the FedAvg scale: (1 - beta) * (d + beta * v)
+                applied = {key: (1 - beta) * (aggregated[key] + beta * self.momentum_buffer[key])
+                           for key in aggregated}
+            else:
+                # Convex blend of the momentum direction and the fresh aggregate
+                # keeps the effective step size comparable to plain FedAvg while
+                # inheriting the smoothed direction.
+                applied = {key: (1 - beta) * self.momentum_buffer[key] + beta * aggregated[key]
+                           for key in aggregated}
 
         new_state = state_add(global_state, applied, alpha=1.0)
         report = AggregationReport(
@@ -172,6 +186,34 @@ class FedAggregator:
         self.momentum_buffer = None
 
 
+def capped_simplex(weights: np.ndarray, cap: float, iters: int = 100) -> np.ndarray:
+    """Project non-negative weights onto {a : sum a = 1, 0 <= a_k <= cap}.
+
+    Water-filling: clip the weights above the cap and hand the excess to the
+    uncapped weights in proportion to their size, until none exceeds the cap.
+    If ``cap * n < 1`` the set is empty and the uniform vector is returned.
+    """
+    w = np.clip(np.asarray(weights, dtype=np.float64), 0.0, None)
+    n = w.size
+    if n == 0:
+        return w
+    if cap * n < 1.0 - 1e-12:
+        return np.full(n, 1.0 / n)
+    w = w / w.sum() if w.sum() > 0 else np.full(n, 1.0 / n)
+    for _ in range(iters):
+        over = w > cap
+        if not over.any():
+            break
+        excess = float((w[over] - cap).sum())
+        w[over] = cap
+        free = ~over & (w < cap)
+        if not free.any():
+            break
+        share = w[free] if w[free].sum() > 0 else np.ones(int(free.sum()))
+        w[free] += excess * share / share.sum()
+    return w / w.sum()
+
+
 def has_converged(previous: StateDict, current: StateDict, tolerance: float) -> Tuple[bool, float]:
     """FR-07 / PRD 8.9: stop when ||w^{t+1} - w^t||_2 <= epsilon."""
     from ..utils.tensors import state_sub
@@ -179,4 +221,5 @@ def has_converged(previous: StateDict, current: StateDict, tolerance: float) -> 
     return distance <= tolerance, distance
 
 
-__all__ = ["FedAggregator", "ContributedUpdate", "AggregationReport", "has_converged"]
+__all__ = ["FedAggregator", "ContributedUpdate", "AggregationReport", "has_converged",
+           "capped_simplex"]
