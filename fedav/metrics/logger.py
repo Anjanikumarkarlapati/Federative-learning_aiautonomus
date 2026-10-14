@@ -20,7 +20,7 @@ CSV_COLUMNS = [
     "round", "accuracy", "mAP50", "ade", "fde", "loss", "clients_selected",
     "clients_reported", "mb_round", "mb_cumulative", "delta_norm",
     "client_acc_mean", "client_acc_std", "client_acc_min", "epsilon_spent",
-    "lr", "round_seconds",
+    "lr", "round_seconds", "uplink_airtime_s", "uplink_energy_j",
 ]
 
 

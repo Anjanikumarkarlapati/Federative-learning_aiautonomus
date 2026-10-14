@@ -46,6 +46,7 @@ from ..privacy.dp import PrivacyAccountant
 from ..server.aggregator import ContributedUpdate, FedAggregator, has_converged
 from ..server.secure import SecureAggregationMasks, SecureChannel
 from ..server.selection import ClientSelector
+from ..server.v2x import V2XRadioModel
 from ..utils.seeding import rng as make_rng, seed_everything
 from ..utils.tensors import (StateDict, clone_state, state_add, state_norm,
                              state_numel, state_sub, state_zeros_like,
@@ -70,6 +71,7 @@ class RunResult:
     robustness: Dict[str, float] = field(default_factory=dict)
     privacy: Dict[str, Any] = field(default_factory=dict)
     selection: Dict[str, float] = field(default_factory=dict)
+    radio: Dict[str, float] = field(default_factory=dict)
     wall_clock_s: float = 0.0
 
     def summary(self) -> Dict[str, Any]:
@@ -88,6 +90,7 @@ class RunResult:
             "robustness": self.robustness,
             "privacy": self.privacy,
             "selection": self.selection,
+            "radio": self.radio,
             "wall_clock_s": round(self.wall_clock_s, 1),
         }
 
@@ -108,6 +111,7 @@ class SimRunner:
         self.aggregator = FedAggregator(cfg.aggregation)
         self.serializer = UpdateSerializer(cfg.comm)
         self.channel = SecureChannel()
+        self.radio = V2XRadioModel()              # bytes -> airtime / energy
         self.compressor = TopKCompressor(ratio=cfg.comm.topk_ratio,
                                          error_feedback=cfg.comm.error_feedback,
                                          min_ratio=cfg.comm.min_topk_ratio)
@@ -201,7 +205,15 @@ class SimRunner:
                 # server differences them against w^(r) to recover the update.
                 payload = state_add(self.global_state, payload, alpha=1.0)
             blob = self.serializer.pack(payload, update.meta())
-            delivered, _, _ = self.channel.send_up(blob, vehicle.profile.link_uptime, generator)
+            delivered, wire_bytes, _ = self.channel.send_up(blob, vehicle.profile.link_uptime,
+                                                            generator)
+            # Own RNG stream, so adding the radio model leaves every other draw unchanged.
+            link = self.radio.sample(wire_bytes, vehicle.profile.region,
+                                     make_rng(self.cfg.seed, round_id, 91, client_id))
+            event.update({"airtime_s": round(link.airtime_s, 5),
+                          "radio_energy_j": round(link.energy_j, 5),
+                          "rate_mbps": round(link.rate_mbps, 3),
+                          "distance_m": round(link.distance_m, 1)})
             if not delivered:
                 stats["dropped"] += 1              # PRD 16: client drops mid-round
                 events[client_id] = {"status": "dropped", **event}
@@ -221,6 +233,28 @@ class SimRunner:
                 q_k=float(meta["q_k"]), steps=int(meta.get("steps", 1))))
             raw_updates.append(update)
         return contributed, raw_updates, stats, events
+
+    @staticmethod
+    def _radio_totals(events: Dict[int, Dict[str, Any]]) -> Dict[str, float]:
+        """Shared-channel uplink cost of the round: every transmission occupies
+        the cell, delivered or not."""
+        sent = [e for e in events.values() if "airtime_s" in e]
+        if not sent:
+            return {"uplink_airtime_s": 0.0, "uplink_energy_j": 0.0, "max_vehicle_airtime_s": 0.0}
+        return {"uplink_airtime_s": round(sum(e["airtime_s"] for e in sent), 5),
+                "uplink_energy_j": round(sum(e["radio_energy_j"] for e in sent), 5),
+                "max_vehicle_airtime_s": round(max(e["airtime_s"] for e in sent), 5)}
+
+    def _radio_summary(self, records: List[Dict[str, Any]], rounds: int) -> Dict[str, Any]:
+        airtime = sum(r.get("uplink_airtime_s", 0.0) for r in records)
+        energy = sum(r.get("uplink_energy_j", 0.0) for r in records)
+        return {"model": "3GPP TR 38.901 UMi (TR 37.885 V2I), "
+                         f"{self.radio.carrier_ghz} GHz, {self.radio.bandwidth_mhz} MHz, "
+                         f"{self.radio.tx_power_dbm} dBm",
+                "uplink_airtime_s_per_round": round(airtime / rounds, 4),
+                "uplink_airtime_s_total": round(airtime, 3),
+                "uplink_energy_j_per_round": round(energy / rounds, 4),
+                "uplink_energy_j_total": round(energy, 3)}
 
     def _secure_sum(self, updates: List[ContributedUpdate], alphas: np.ndarray,
                     round_id: int) -> Tuple[StateDict, bool]:
@@ -344,6 +378,7 @@ class SimRunner:
                 "clients_eligible": selection.eligible,
                 "selection_relaxed": selection.relaxed,
                 "mb_round": round(round_mb, 5),
+                **self._radio_totals(events),
                 "mb_cumulative": round(total_mb, 4),
                 "delta_norm": round(distance, 6),
                 "aggregate_norm": round(report.update_norm, 6),
@@ -390,6 +425,7 @@ class SimRunner:
                      else {"mode": "no DP noise", "raw_data_egress": False,
                            "secure_aggregation": cfg.dp.secure_aggregation}),
             selection=self.selector.coverage(),
+            radio=self._radio_summary(self.logger.records, rounds),
             wall_clock_s=time.perf_counter() - started,
         )
         self.logger.write_summary(result.summary())
