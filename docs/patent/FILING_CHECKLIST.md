@@ -5,6 +5,18 @@ secondary sources because the IP India pages could not be opened during the
 research; check them against the live First Schedule on the day of filing. Not
 legal advice; a registered patent agent should file.*
 
+## Disclosure status — read first
+
+On **14 October 2026** this GitHub repository was found to be **public**
+(`Anjanikumarkarlapati/Federative-learning_aiautonomus`). With the owner's
+explicit decision, the implementation of the claimed mechanisms (K1, K2), the
+draft claims, drawings and this patent package were pushed to it on that date.
+Earlier the same day the research report describing K1 and K2 in words was
+pushed too. India has no general grace period for an inventor's own
+publication (s.31 covers only narrow cases), so **an agent must assess whether
+these disclosures already anticipate the claims** before anything is filed. The
+date of the first public commit of each element is in `git log`.
+
 ## Order of work
 
 1. **Do not publish anything yet.** No public repository, preprint, poster, talk
