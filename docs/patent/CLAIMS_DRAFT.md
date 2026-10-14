@@ -146,10 +146,11 @@ weight as the bound on any one vehicle's influence on the aggregate.
   (airtime-budget tiers on one shared support). If a full-text search finds K2
   alone, step (b) and the segment structure can move to a dependent claim and
   claim 1 rests on K1 with the shared support.
-* Claim 2 step (j) is the NACK-driven residual retention. It is measured in
-  `results/patent/` as the difference between `proposed_tiered`
-  (retention on) and `fedavg_transport` (retention off) under 2% corrupted
-  uploads plus link drops.
+* Claim 2 step (j) is the NACK-driven residual retention. It is implemented and
+  unit-tested, but the D − B comparison in `results/patent/` does not isolate
+  it (D and B also differ in selection, weighting and masking). An ablation
+  with only `comm.nack_retention` toggled, under link drops and corrupted
+  uploads, is still needed before relying on it.
 * Claim 10 depends on the DP path; it is implemented (`fedav/client/trainer.py`,
   `fedav/privacy/dp.py`) but the multi-seed evidence was run with DP off. Run
   `configs/dp.yaml` before relying on it.

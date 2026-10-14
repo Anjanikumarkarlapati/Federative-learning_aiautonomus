@@ -230,11 +230,44 @@ multicast, volume budget), (C) the invention without airtime tiers, and (D) the
 invention with airtime tiers. The results (mean ± 95% confidence interval over
 seeds) are:
 
-[[RESULTS TABLE]]
+| Quantity | A | B | C | D |
+|---|---|---|---|---|
+| Best test accuracy (%) | 45.1 ± 17.9 | 40.6 ± 21.0 | 33.3 ± 23.0 | 37.4 ± 16.6 |
+| Accuracy on the worst-served vehicle (%) | 8.9 ± 12.2 | 6.3 ± 21.2 | 4.9 ± 10.7 | 5.8 ± 17.3 |
+| Traffic per round, up + down (MB) | 74.55 ± 0.01 | 8.34 ± 0.10 | 8.73 ± 0.02 | 6.98 ± 0.50 |
+| Uplink airtime per round (s) | 209.4 ± 25.2 | 35.0 ± 4.6 | 42.8 ± 5.0 | 11.3 ± 1.7 |
+| Longest round's uplink airtime (s) | 332.2 ± 15.7 | 54.0 ± 2.6 | 68.5 ± 10.0 | 23.4 ± 7.3 |
+| Uplink radio energy per round (J) | 167.1 ± 20.1 | 27.9 ± 3.7 | 34.1 ± 4.0 | 9.1 ± 1.3 |
+| Best accuracy within 100 s of cumulative uplink airtime (%) | 16.7 | 17.4 ± 3.3 | 16.5 ± 2.9 | 24.4 ± 17.5 |
+| Best accuracy within 300 s of cumulative uplink airtime (%) | 16.7 ± 0.0 | 21.0 ± 11.8 | 23.9 ± 15.7 | 36.2 ± 19.4 |
+
+Because each seed runs every arm on the same fleet, the effect of the invention
+over known compression is read from the per-seed differences against arm B
+(mean ± 95% confidence interval):
+
+| Quantity | C − B | D − B |
+|---|---|---|
+| Uplink airtime per round (s) | 7.8 ± 7.8 | -23.7 ± 4.3 |
+| Longest round's uplink airtime (s) | 14.5 ± 11.2 | -30.6 ± 5.3 |
+| Uplink radio energy per round (J) | 6.2 ± 6.2 | -18.9 ± 3.4 |
+| Traffic per round (MB) | 0.38 ± 0.13 | -1.36 ± 0.55 |
+| Vehicles whose update arrived, per round | 1.14 ± 0.77 | 1.14 ± 0.77 |
+| Best test accuracy (percentage points) | -7.4 ± 22.6 | -3.3 ± 20.7 |
+
+The airtime-tiered embodiment (D) reduces the time the shared uplink channel is
+occupied per round, the longest round's occupancy and the radio energy spent,
+with confidence intervals that exclude zero. Arms C and D also deliver the
+updates of more vehicles per round; that difference comes from their link-aware
+selection (arms A and B select uniformly at random), not from the masking. Test
+accuracy after 30 rounds does not differ significantly between
+the arms at three seeds; the invention is not claimed to raise accuracy. The
+quality-hiding embodiment without tiers (C) costs slightly more traffic than B,
+the overhead of 4-byte ring elements, in exchange for the road-side unit never
+seeing an individual vehicle's update or quality weight.
 
 In every round of arms C and D the aggregate recovered by the road-side unit
 matched the plaintext quality-weighted, step-normalised aggregate to a relative
-error of [[ERR]], the residue of fixed-point rounding; masks cancelled exactly.
+error of at most 2.3e-05, the residue of fixed-point rounding; masks cancelled exactly.
 
 ## CLAIMS
 

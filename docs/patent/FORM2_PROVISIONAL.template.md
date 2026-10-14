@@ -232,6 +232,23 @@ seeds) are:
 
 [[RESULTS TABLE]]
 
+Because each seed runs every arm on the same fleet, the effect of the invention
+over known compression is read from the per-seed differences against arm B
+(mean ± 95% confidence interval):
+
+[[PAIRED TABLE]]
+
+The airtime-tiered embodiment (D) reduces the time the shared uplink channel is
+occupied per round, the longest round's occupancy and the radio energy spent,
+with confidence intervals that exclude zero. Arms C and D also deliver the
+updates of more vehicles per round; that difference comes from their link-aware
+selection (arms A and B select uniformly at random), not from the masking. Test
+accuracy after 30 rounds does not differ significantly between
+the arms at three seeds; the invention is not claimed to raise accuracy. The
+quality-hiding embodiment without tiers (C) costs slightly more traffic than B,
+the overhead of 4-byte ring elements, in exchange for the road-side unit never
+seeing an individual vehicle's update or quality weight.
+
 In every round of arms C and D the aggregate recovered by the road-side unit
 matched the plaintext quality-weighted, step-normalised aggregate to a relative
 error of [[ERR]], the residue of fixed-point rounding; masks cancelled exactly.

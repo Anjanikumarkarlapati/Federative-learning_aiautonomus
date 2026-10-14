@@ -41,6 +41,23 @@ def results_table(effects: dict) -> str:
     return "\n".join(lines)
 
 
+PAIRED = [("uplink_airtime_s_per_round", "Uplink airtime per round (s)", 1, 1),
+          ("max_round_airtime_s", "Longest round's uplink airtime (s)", 1, 1),
+          ("uplink_energy_j_per_round", "Uplink radio energy per round (J)", 1, 1),
+          ("mb_per_round", "Traffic per round (MB)", 1, 2),
+          ("clients_reported_per_round", "Vehicles whose update arrived, per round", 1, 2),
+          ("best_accuracy", "Best test accuracy (percentage points)", 100, 1)]
+
+
+def paired_table(effects: dict) -> str:
+    paired = effects["vs_fedavg_transport"]["paired_vs_reference"]
+    lines = ["| Quantity | C − B | D − B |", "|---|---|---|"]
+    for m, label, scale, digits in PAIRED:
+        lines.append(f"| {label} | {fmt(paired.get('proposed_secure', {}).get(m, {}), scale, digits)}"
+                     f" | {fmt(paired.get('proposed_tiered', {}).get(m, {}), scale, digits)} |")
+    return "\n".join(lines)
+
+
 def max_error(root: str) -> float:
     worst = 0.0
     for arm in ("proposed_secure", "proposed_tiered"):
@@ -64,6 +81,7 @@ def main() -> None:
         with open(eff) as fh:
             effects = json.load(fh)
         text = text.replace("[[RESULTS TABLE]]", results_table(effects))
+        text = text.replace("[[PAIRED TABLE]]", paired_table(effects))
         text = text.replace("[[ERR]]", f"at most {max_error(os.path.join(ROOT, 'results', 'patent', 'runs')):.1e}")
     out = os.path.join(PAT, "FORM2_PROVISIONAL.md")
     with open(out, "w", encoding="utf-8") as fh:
