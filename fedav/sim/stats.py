@@ -57,8 +57,20 @@ def cost_to(history: List[Dict[str, Any]], threshold: float, key: str) -> Option
     return None
 
 
+def accuracy_within(history: List[Dict[str, Any]], budget: float, key: str) -> Optional[float]:
+    """Best accuracy reached before cumulative ``key`` (airtime s, MB) exceeds ``budget``."""
+    total, best = 0.0, None
+    for r in history:
+        total += float(r.get(key, 0.0) or 0.0)
+        if total > budget:
+            break
+        best = max(best or 0.0, float(r.get("accuracy", 0.0)))
+    return best
+
+
 def run_metrics(history: List[Dict[str, Any]], summary: Dict[str, Any],
-                thresholds: Iterable[float]) -> Dict[str, Any]:
+                thresholds: Iterable[float],
+                airtime_budgets: Iterable[float] = (100.0, 300.0)) -> Dict[str, Any]:
     rows = [r for r in history if "accuracy" in r]
     acc = [r["accuracy"] for r in rows]
     rob = summary.get("robustness", {}) or {}
@@ -73,6 +85,8 @@ def run_metrics(history: List[Dict[str, Any]], summary: Dict[str, Any],
         "client_acc_std": rob.get("client_acc_std"),
         "clients_reported_per_round": float(np.mean([r.get("clients_reported", 0) for r in rows])) if rows else None,
     }
+    for b in airtime_budgets:
+        out[f"accuracy_within_{int(b)}s_airtime"] = accuracy_within(rows, b, "uplink_airtime_s")
     for t in thresholds:
         tag = f"{int(round(100 * t))}"
         out[f"rounds_to_{tag}"] = rounds_to(rows, t)

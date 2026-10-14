@@ -34,7 +34,8 @@ RUNS = os.path.join(OUT, "runs")
 ARMS = ["std_fedavg", "fedavg_transport", "proposed_secure", "proposed_tiered"]
 LABELS = {"std_fedavg": "Std. FedAvg", "fedavg_transport": "FedAvg + same transport",
           "proposed_secure": "Proposed (K1)", "proposed_tiered": "Proposed (K1 + K2)"}
-THRESHOLDS = (0.40, 0.50, 0.60)
+THRESHOLDS = (0.30, 0.40, 0.50)
+AIRTIME_BUDGETS = (100.0, 300.0)
 
 
 def arm_config(arm: str, seed: int, args):
@@ -112,6 +113,8 @@ ROWS = [  # (metric, label, scale, digits)
     ("max_round_airtime_s", "Worst round uplink airtime (s)", 1, 2),
     ("uplink_energy_j_per_round", "Uplink radio energy per round (J)", 1, 2),
     ("clients_reported_per_round", "Vehicles reporting per round", 1, 2),
+    ("accuracy_within_100s_airtime", "Best accuracy within 100 s cumulative uplink airtime (%)", 100, 1),
+    ("accuracy_within_300s_airtime", "Best accuracy within 300 s cumulative uplink airtime (%)", 100, 1),
 ] + [(f"{k}_{int(100 * t)}", f"{lab} {int(100 * t)}% accuracy", 1, d)
      for t in THRESHOLDS
      for k, lab, d in (("rounds_to", "Rounds to", 1), ("mb_to", "MB to", 1),
@@ -145,7 +148,7 @@ def markdown(out: Dict) -> str:
         lines += [f"## Paired difference vs {title} (arm − reference, per seed)", "",
                   "| Metric | " + " | ".join(LABELS[a] for a in paired) + " |",
                   "|---|" + "---|" * len(paired)]
-        for m, label, scale, digits in ROWS[:9]:
+        for m, label, scale, digits in ROWS[:11]:
             lines.append(f"| {label} | " + " | ".join(
                 stats.fmt(paired[a].get(m, {}), scale, digits) for a in paired) + " |")
         lines.append("")

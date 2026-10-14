@@ -9,8 +9,9 @@ shared seed and expands it into a pseudo-random mask ``m_ij``.  Vehicle i adds
 exactly, while any *individual* masked update is computationally
 indistinguishable from noise.  The server therefore learns only the sum, never a
 single vehicle's contribution - the property the compliance persona of PRD 4
-asks for.  (Production deployments add Shamir-shared dropout recovery; the
-simulator instead re-derives masks over the set that actually reported.)
+asks for.  This float-mask form is kept for the validation figures and tests;
+the runner's secure path is ``fedav/server/secagg.py`` (exact ring masks,
+Diffie-Hellman seeds, hidden quality weights, dropout seed reveal).
 
 **SecureChannel.** Simulates the TLS-protected V2I hop: per-message TLS/record
 overhead, bandwidth-derived latency, link-uptime-driven drops and byte

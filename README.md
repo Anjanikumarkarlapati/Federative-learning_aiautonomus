@@ -28,6 +28,7 @@ section. It builds on **FedAvg** and adds the four enhancements the PRD specifie
 - [8. Configuration reference](#8-configuration-reference)
 - [9. Results](#9-results)
 - [Mathematical validation](docs/MATHEMATICAL_VALIDATION.md) — 14 figures verifying the equations
+- [Patent package (India)](docs/patent/README.md) — claims, drawings, Form 2 draft and multi-seed evidence
 - [10. Testing](#10-testing)
 - [11. Project layout](#11-project-layout)
 - [12. PRD traceability](#12-prd-traceability)
@@ -259,6 +260,16 @@ Every pair `(i, j)` of participants derives a shared seed and expands it to a ma
 exactly, while any individual masked update is indistinguishable from noise. The runner **verifies
 this identity every round** and logs `secure_aggregation_verified`.
 
+The runner's secure path (`fedav/server/secagg.py`) goes further than this textbook form. Each
+vehicle folds its private weight `w_k = q_k n_k / n_ref` and its step count `τ_k` *into* the
+masked payload, so the RSU recovers only `Σ w u`, `Σ w` and `Σ w τ` and forms the FedNova
+quality-weighted update `(Σwτ/Σw)·Σwu/Σw` without seeing any vehicle's `q_k`. Values are
+fixed point in `Z_2^32` (masks cancel exactly), pair seeds come from Diffie-Hellman, every
+vehicle sends a prefix of one shared support ordered by the previous global update (no
+indices on the wire), the prefix length is chosen to fit an airtime budget
+(`comm.airtime_budget_s`), and lost uploads are recovered by survivors revealing their pair
+seeds. See [docs/patent/EMBODIMENTS.md](docs/patent/EMBODIMENTS.md).
+
 > Secure aggregation and Byzantine-robust aggregation are mutually exclusive by construction: a
 > trimmed mean needs per-client values, which secure aggregation is designed to hide. The runner
 > takes the robust path when `aggregation.byzantine_robust` is on and says so in the logs.
@@ -388,16 +399,18 @@ All defaults are PRD section 10.
 | `train` | `fedprox_mu` | 0.0 | `μ`, raise when drift is high |
 | `train` | `tolerance` | 1e-3 | `ε` for `‖Δw‖` |
 | `train` | `target_accuracy` | 0.90 | PRD 12.3 acceptance bar |
+| `selection` | `mode` | aware | `uniform` = McMahan random selection (FedAvg baseline) |
 | `selection` | `fraction` | 0.3 | `C` |
 | `selection` | `uptime_threshold` | 0.55 | minimum V2I link uptime |
 | `selection` | `trajectory_aware` | true | stratify over regions |
-| `selection` | `fairness_k` | 12 | every vehicle within `K` rounds |
+| `selection` | `fairness_k` | 12 | every vehicle within `K` rounds, weak links included |
 | `selection` | `round_timeout_s` | 45 | straggler cut-off |
 | `aggregation` | `quality_aware` | true | `q_k` weighting |
 | `aggregation` | `normalize_local_steps` | true | FedNova; required whenever `E_k` varies |
 | `aggregation` | `server_momentum` | 0.9 | `β` on the aggregate |
 | `aggregation` | `byzantine_robust` | false | trimmed mean + norm filter |
 | `aggregation` | `q_min` / `q_max` | 0.05 / 1.0 | clamp on `q_k` |
+| `aggregation` | `weight_cap` | 4.0 | cap on `w_k = q_k n_k / n_ref` in secure aggregation |
 | `dp` | `enabled` | false | clip + Gaussian noise |
 | `dp` | `clip_norm` | 1.0 | `C` |
 | `dp` | `epsilon` / `delta` | 8.0 / 1e-5 | privacy budget |
@@ -405,6 +418,10 @@ All defaults are PRD section 10.
 | `comm` | `fp16` / `gzip_level` | true / 6 | wire codec |
 | `comm` | `topk_ratio` | 0.25 | sparsified uplink |
 | `comm` | `mb_budget_per_round` | 9.0 | NFR budget the controller defends |
+| `comm` | `airtime_budget_s` | 0.0 | > 0: per-round uplink airtime shared by secure-aggregation tiers |
+| `comm` | `tier_levels` | 5 | prefix lengths on the shared support |
+| `comm` | `nack_retention` | true | a failed upload stays in the vehicle's residual |
+| `comm` | `corrupt_prob` | 0.0 | fault injection: corrupted uploads |
 | `data` | `dirichlet_alpha` | 0.4 | label skew |
 | `data` | `quantity_skew` | 0.45 | log-normal `σ` on `n_k` |
 
@@ -413,6 +430,11 @@ All defaults are PRD section 10.
 ## 9. Results
 
 Measured on this repository — fleet `N = 50`, `C = 0.3`, `E = 5`, `R_max = 60`, Dirichlet `α = 0.4`, seed `1337`. All four arms share one fleet and one seed; each arm starts from the same augmentation state whatever ran before it. Source: `results/benchmark/`, which also holds every vehicle's profile, per-round record and final scorecard (open it in the dashboard's **Fleet** page).
+
+> These four-arm numbers were measured before the secure-aggregation rewrite of 14 Oct 2026, with
+> the earlier float-mask path (which also dropped FedNova normalisation). The current mechanism
+> is measured over three seeds, against FedAvg on the same compression transport, in
+> [`results/patent/effects.md`](results/patent/effects.md).
 
 | Metric | Centralized | Local-only | Std. FedAvg | Proposed FL |
 |---|---|---|---|---|
