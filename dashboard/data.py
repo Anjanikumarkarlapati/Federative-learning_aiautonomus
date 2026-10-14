@@ -368,3 +368,205 @@ def compare_arms_per_vehicle(base_dir: Optional[str] = None) -> pd.DataFrame:
         if not s.empty and "final_accuracy" in s:
             cols[arm] = s.set_index("client_id")["final_accuracy"]
     return pd.DataFrame(cols)
+
+
+# -------------------------------------------------------------- richer summaries
+
+def run_summary_row(s: Dict[str, Any]) -> Dict[str, Any]:
+    """Everything a ``summary.json`` says, flattened into one display row."""
+    rob = s.get("robustness", {}) or {}
+    sel = s.get("selection", {}) or {}
+    priv = s.get("privacy", {}) or {}
+
+    def pct(v):
+        return None if v is None else 100 * v
+
+    return {
+        "Accuracy (%)": pct(s.get("accuracy")),
+        "mAP@0.5": s.get("mAP50"),
+        "ADE": s.get("ade"),
+        "FDE": s.get("fde"),
+        "Mean client (%)": pct(rob.get("client_acc_mean")),
+        "P10 client (%)": pct(rob.get("client_acc_p10")),
+        "Worst client (%)": pct(rob.get("client_acc_min")),
+        "Client acc. std": rob.get("client_acc_std"),
+        "MB / round": s.get("mb_per_round"),
+        "Total MB": s.get("total_mb"),
+        "Rounds": s.get("rounds_run"),
+        "Rounds to target": s.get("rounds_to_target"),
+        "Converged": s.get("converged"),
+        "Selection Gini": sel.get("selection_gini"),
+        "Mean participation": sel.get("mean_participation"),
+        "Never selected": sel.get("clients_never_selected"),
+        "Privacy": priv.get("mode"),
+        "Secure agg.": priv.get("secure_aggregation"),
+        "Wall clock (min)": None if s.get("wall_clock_s") is None else s["wall_clock_s"] / 60,
+    }
+
+
+def benchmark_full_table(report: Dict[str, Any]) -> pd.DataFrame:
+    """Like :func:`benchmark_table` but with every field the summaries carry."""
+    results = report.get("results", {})
+    rows = []
+    for arm in [a for a in ARM_ORDER if a in results] + [a for a in results if a not in ARM_ORDER]:
+        rows.append({"arm": arm, "Arm": ARM_LABELS.get(arm, arm), **run_summary_row(results[arm])})
+    return pd.DataFrame(rows)
+
+
+def rounds_to_threshold(rounds: pd.DataFrame, threshold: float,
+                        metric: str = "accuracy", group: str = "arm") -> Dict[str, Optional[int]]:
+    """First round at which each group reaches ``metric >= threshold`` (None if never)."""
+    out: Dict[str, Optional[int]] = {}
+    if rounds.empty or metric not in rounds:
+        return out
+    for key, sub in rounds.groupby(group):
+        hit = sub[sub[metric] >= threshold]
+        out[key] = int(hit["round"].min()) if not hit.empty else None
+    return out
+
+
+def smooth(series: pd.Series, window: int) -> pd.Series:
+    """Trailing moving average; window 1 returns the series unchanged."""
+    return series if window <= 1 else series.rolling(window, min_periods=1).mean()
+
+
+def status_per_round(vehicle_rounds: pd.DataFrame) -> pd.DataFrame:
+    """Rows = round, columns = vehicle status, values = number of vehicles."""
+    if vehicle_rounds.empty or "status" not in vehicle_rounds:
+        return pd.DataFrame()
+    counts = pd.crosstab(vehicle_rounds["round"], vehicle_rounds["status"])
+    return counts.reindex(columns=[s for s in VEHICLE_STATUSES if s in counts])
+
+
+# -------------------------------------------------------------------- comparing
+
+def flatten(d: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for k, v in (d or {}).items():
+        key = f"{prefix}{k}"
+        if isinstance(v, dict):
+            out.update(flatten(v, key + "."))
+        else:
+            out[key] = v
+    return out
+
+
+def config_diff(configs: Dict[str, Dict[str, Any]], only_different: bool = True) -> pd.DataFrame:
+    """Rows = config keys, columns = runs. ``name``/``out_dir`` are always ignored."""
+    flat = {name: flatten(cfg) for name, cfg in configs.items() if cfg}
+    if not flat:
+        return pd.DataFrame()
+    df = pd.DataFrame(flat).drop(index=["name", "out_dir"], errors="ignore")
+    df = df.map(lambda v: json.dumps(v) if isinstance(v, (list, dict)) else v)
+    if only_different and df.shape[1] > 1:
+        df = df[df.astype(str).nunique(axis=1) > 1]
+    return df.sort_index()
+
+
+def runs_rounds(run_dirs: Dict[str, str]) -> pd.DataFrame:
+    """Long-format per-round telemetry for any set of runs, keyed by label."""
+    frames = []
+    for label, path in run_dirs.items():
+        df = load_rounds(path)
+        if not df.empty:
+            frames.append(df.assign(run=label))
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+# Per-round metrics the framework logs, with display name, unit scale and direction.
+ROUND_METRICS = {
+    "accuracy": ("Global test accuracy", "Accuracy (%)", 100, "higher"),
+    "loss": ("Global test loss", "Loss", 1, "lower"),
+    "mAP50": ("Detection mAP@0.5", "mAP@0.5", 1, "higher"),
+    "ade": ("Trajectory ADE", "ADE", 1, "lower"),
+    "fde": ("Trajectory FDE", "FDE", 1, "lower"),
+    "client_acc_mean": ("Mean per-vehicle accuracy", "Accuracy (%)", 100, "higher"),
+    "client_acc_min": ("Worst per-vehicle accuracy", "Accuracy (%)", 100, "higher"),
+    "client_acc_std": ("Cross-vehicle accuracy std", "Std", 1, "lower"),
+    "mb_round": ("Uplink per round", "MB", 1, "lower"),
+    "mb_cumulative": ("Cumulative uplink", "MB", 1, "lower"),
+    "clients_reported": ("Vehicles reporting", "Vehicles", 1, "higher"),
+    "delta_norm": ("Global update norm ‖Δw‖", "Norm", 1, "lower"),
+    "epsilon_spent": ("Privacy budget spent ε", "ε", 1, "lower"),
+    "lr": ("Learning rate", "η", 1, "—"),
+    "round_seconds": ("Wall-clock per round", "Seconds", 1, "lower"),
+    "mean_q": ("Mean quality weight q̄", "q", 1, "—"),
+}
+
+
+def available_metrics(df: pd.DataFrame) -> List[str]:
+    return [m for m in ROUND_METRICS if m in df and df[m].notna().any()]
+
+
+# ------------------------------------------------------------- ablation, richer
+
+def ablation_full_table(study: str) -> pd.DataFrame:
+    """Every summary field per variant, plus deltas against the study's baseline."""
+    if study == "cli":
+        data = read_json(_path("runs", "ablation.json")) or {}
+    else:
+        data = read_json(_path(ABLATION_STUDIES[study][0])) or {}
+    rows = []
+    for name, s in data.items():
+        if isinstance(s, dict) and "accuracy" in s:
+            rows.append({"Variant": name.replace("_", " "), **run_summary_row(s)})
+    if rows and baseline_variant([r["Variant"] for r in rows]) is None and study != "cli":
+        # The committed studies share one 30-round FedAvg control (README section 9).
+        control = (read_json(_path(ABLATION_STUDIES["attribution"][0])) or {}).get("fedavg_control")
+        if control:
+            rows.insert(0, {"Variant": "fedavg control (shared)", **run_summary_row(control)})
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    base = baseline_variant(df["Variant"].tolist())
+    if base is not None:
+        ref = df.set_index("Variant").loc[base]
+        for col in ("Accuracy (%)", "Worst client (%)", "MB / round"):
+            df[f"Δ {col}"] = df[col] - ref[col]
+    df.attrs["baseline"] = base
+    return df
+
+
+def baseline_variant(names: List[str]) -> Optional[str]:
+    for n in names:
+        if "fedavg" in n or "control" in n or "baseline" in n:
+            return n
+    return None
+
+
+def ablation_studies_available() -> Dict[str, str]:
+    """Committed studies plus the latest ``fedav.cli ablation`` run if one exists."""
+    out = {k: v[1] for k, v in ABLATION_STUDIES.items()}
+    if os.path.exists(_path("runs", "ablation.json")):
+        out["cli"] = "Latest `fedav.cli ablation` run (runs/ablation.json)"
+    return out
+
+
+def validation_sections() -> List[Dict[str, str]]:
+    """The numbered sections of docs/MATHEMATICAL_VALIDATION.md: title, figure, text.
+
+    Falls back to bare figures when the document is missing.
+    """
+    import re
+
+    doc = _path("docs", "MATHEMATICAL_VALIDATION.md")
+    sections: List[Dict[str, str]] = []
+    if os.path.exists(doc):
+        with open(doc, encoding="utf-8") as fh:
+            text = fh.read()
+        for block in re.split(r"(?m)^## ", text)[1:]:
+            title, _, body = block.partition("\n")
+            m = re.match(r"(\d+)\.\s+(.*)", title.strip())
+            img = re.search(r"!\[[^\]]*\]\((figures/[^)]+\.png)\)", body)
+            if not m or not img:
+                continue
+            body = body.replace(img.group(0), "").strip()
+            body = re.sub(r"\[([^\]]+)\]\((?!https?://)[^)]+\)", r"\1", body)  # links don't resolve here
+            sections.append({"number": m.group(1), "title": m.group(2).strip(),
+                             "image": _path("docs", img.group(1)), "text": body})
+    if not sections:
+        for i, path in enumerate(validation_figures(), 1):
+            name = os.path.splitext(os.path.basename(path))[0].split("_", 1)[-1]
+            sections.append({"number": str(i), "title": name.replace("_", " ").capitalize(),
+                             "image": path, "text": ""})
+    return sections

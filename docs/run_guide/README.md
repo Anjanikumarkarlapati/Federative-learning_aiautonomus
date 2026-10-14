@@ -16,7 +16,7 @@ screenshots of `streamlit run dashboard/app.py`. To regenerate them yourself, se
 | 7 | [Benchmark](#step-7--benchmark-all-four-arms) | `python -m fedav.cli benchmark --config configs/quick.yaml` |
 | 8 | [Ablation](#step-8--ablation) | `python -m fedav.cli ablation --config configs/quick.yaml` |
 | 9 | [Dashboard](#step-9--start-the-dashboard) | `streamlit run dashboard/app.py` |
-| 10–17 | [Dashboard pages](#step-10--overview) | open <http://localhost:8501> |
+| 10–18 | [Dashboard pages](#step-10--overview) | open <http://localhost:8501> |
 
 ---
 
@@ -133,7 +133,9 @@ Then open <http://localhost:8501>. Pick pages from the left sidebar.
 ## Step 10 — Overview
 
 Headline numbers for the full benchmark in `results/benchmark` (Proposed FL 82.2 %, 8.7 MB per
-round, 88 % less uplink than FedAvg) and the PRD 12.3 acceptance table.
+round, 88 % less uplink than FedAvg, 80 % accuracy reached in round 34), the learning curves,
+a cost-vs-accuracy chart, auto-generated key findings and the PRD 12.3 acceptance table. Every
+page has a **How to read this page** panel; hover the ⓘ next to a number for its definition.
 
 ![Step 10](step10_dashboard_overview.png)
 
@@ -147,43 +149,61 @@ drill-down, round × vehicle heatmaps and region/weather breakdowns.
 
 ## Step 12 — Benchmark
 
-The four arms round by round: accuracy, cumulative uplink, loss, trajectory ADE, the final-metrics
-table and the worst-served vehicle.
+Toggle the four arms on and off, then use the tabs:
+
+- **Learning curves** — any logged metric (accuracy, loss, mAP, ADE/FDE, worst/mean vehicle,
+  uplink…), with smoothing and an x-axis of rounds *or* cumulative MB.
+- **Efficiency** — drag a threshold to see the rounds and MB each arm needs to reach it.
+- **Fairness** — mean / 10th-percentile / worst vehicle, and every car's accuracy as a dot.
+- **Operations** — vehicles reporting, wall-clock per round, learning rate, update norm, plus
+  selection fairness (Gini) and run time.
+- **All metrics** — every summary field (CSV download) and the config keys that differ.
 
 ![Step 12](step12_dashboard_benchmark.png)
 
 ## Step 13 — Ablation
 
-Choose a study (`ingredients`, `attribution`, `fix`) to see each enhancement in isolation.
+Choose a study (`ingredients`, `attribution`, `fix`, or your latest `fedav.cli ablation` run) and
+a metric. Left: each variant, with the baseline in gray. Right: the change against the FedAvg
+baseline — blue better, red worse.
 
 ![Step 13](step13_dashboard_ablation.png)
 
-## Step 14 — Launch a run
+## Step 14 — Compare runs
 
-Set N, C, E, rounds, quality/trajectory-aware, DP ε, top-k and the Byzantine defence, then press
-**Start run**. It runs the same CLI as Step 5.
+Pick any runs (committed or your own) to overlay their curves, line up their final metrics and
+list exactly which config keys differ.
 
-![Step 14](step14_dashboard_launch.png)
+![Step 14](step14_dashboard_compare.png)
 
-## Step 15 — Watching the run finish
+## Step 15 — Launch a run
+
+Set N, C, E, rounds, quality/trajectory-aware, DP ε, top-k and the Byzantine defence (hover ⓘ for
+what each does), then press **Start run**. It runs the same CLI as Step 5.
+
+![Step 15](step15_dashboard_launch.png)
+
+## Step 16 — Watching the run finish
 
 Rounds stream in live: accuracy, loss, mean quality weight, uplink, update norm, and which vehicle
 took part (or dropped out) in each round.
 
-![Step 15](step15_dashboard_launch_finished.png)
+![Step 16](step16_dashboard_launch_finished.png)
 
-## Step 16 — Run explorer
+## Step 17 — Run explorer
 
-Open any run under `runs/` or `results/`: per-round table, summary, config and CSV download.
+Open any run under `runs/` or `results/`: headline numbers, curves for any metric, vehicles per
+round by outcome, the per-round table (CSV), and the summary and config as tables.
 
-![Step 16](step16_dashboard_explorer.png)
+![Step 17](step17_dashboard_explorer.png)
 
-## Step 17 — Validation
+## Step 18 — Validation
 
-The 14 mathematical-validation figures from
-[docs/MATHEMATICAL_VALIDATION.md](../MATHEMATICAL_VALIDATION.md).
+The 14 mathematical-validation figures, each with its explanation from
+[docs/MATHEMATICAL_VALIDATION.md](../MATHEMATICAL_VALIDATION.md); switch to **One at a time** for a
+large view.
 
-![Step 17](step17_dashboard_validation.png)
+![Step 18](step18_dashboard_validation.png)
 
 ---
 
@@ -196,10 +216,10 @@ pip install -r requirements.txt playwright pillow
 bash scripts/make_run_guide.sh
 SKIP_SLOW=1 bash scripts/make_run_guide.sh      # skip benchmark + ablation
 
-# Steps 10–17: browser screenshots of every dashboard page
+# Steps 10–18: browser screenshots of every dashboard page
 streamlit run dashboard/app.py &
 python -m playwright install chromium            # once, if Playwright has no browser
-python scripts/screenshot_dashboard.py           # add --skip-launch to skip Step 15
+python scripts/screenshot_dashboard.py           # add --skip-launch to skip Step 16
 ```
 
 - `scripts/render_terminal.py` turns a captured text file into a terminal-style PNG:

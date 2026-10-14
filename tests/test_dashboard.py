@@ -39,6 +39,50 @@ def test_ablation_tables(study):
     assert not data.ablation_table(study).empty
 
 
+def test_full_benchmark_table_carries_every_summary_field():
+    full = data.benchmark_full_table(data.load_benchmark()).set_index("arm")
+    assert full.loc["proposed_fl", "P10 client (%)"] == pytest.approx(62.457, abs=1e-3)
+    assert full.loc["proposed_fl", "Selection Gini"] == pytest.approx(0.4685, abs=1e-4)
+    assert full.loc["centralized", "Privacy"]
+
+
+def test_rounds_to_threshold():
+    df = pd.DataFrame({"arm": ["a"] * 3 + ["b"] * 3, "round": [1, 2, 3] * 2,
+                       "accuracy": [0.1, 0.5, 0.9, 0.1, 0.2, 0.3]})
+    assert data.rounds_to_threshold(df, 0.5) == {"a": 2, "b": None}
+
+
+def test_config_diff_keeps_only_differing_keys():
+    a = {"name": "a", "seed": 1, "train": {"lr": 0.1, "rounds": 5}}
+    b = {"name": "b", "seed": 1, "train": {"lr": 0.2, "rounds": 5}}
+    diff = data.config_diff({"a": a, "b": b})
+    assert list(diff.index) == ["train.lr"]
+    assert len(data.config_diff({"a": a, "b": b}, only_different=False)) == 3
+
+
+@pytest.mark.parametrize("study", list(data.ABLATION_STUDIES))
+def test_ablation_deltas_are_against_the_baseline(study):
+    table = data.ablation_full_table(study)
+    base = table.attrs["baseline"]
+    assert base is not None
+    row = table.set_index("Variant").loc[base]
+    assert row["Δ Accuracy (%)"] == pytest.approx(0.0)
+
+
+def test_validation_sections_pair_each_figure_with_text():
+    sections = data.validation_sections()
+    assert len(sections) == 14
+    assert all(os.path.exists(s["image"]) and s["text"] for s in sections)
+
+
+def test_status_per_round_counts_every_vehicle():
+    vr = pd.DataFrame({"round": [1, 1, 1, 2, 2, 2], "client_id": [0, 1, 2] * 2,
+                       "status": ["reported", "dropped", "not_selected"] * 2})
+    counts = data.status_per_round(vr)
+    assert counts.sum(axis=1).tolist() == [3, 3]
+    assert counts.loc[1, "reported"] == 1
+
+
 def test_load_rounds_tolerates_partial_last_line(tmp_path):
     with open(tmp_path / "rounds.jsonl", "w") as fh:
         fh.write(json.dumps({"round": 1, "accuracy": 0.2}) + "\n")
@@ -149,7 +193,7 @@ def test_arm_result_does_not_depend_on_earlier_arms(tmp_path):
 
 # ------------------------------------------------------------------ the app itself
 
-APP_PAGES = ["Overview", "Fleet (every vehicle)", "Benchmark", "Ablation",
+APP_PAGES = ["Overview", "Fleet (every vehicle)", "Benchmark", "Ablation", "Compare runs",
              "Launch a run", "Run explorer", "Validation"]
 
 

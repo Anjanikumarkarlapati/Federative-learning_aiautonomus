@@ -73,13 +73,14 @@ streamlit run dashboard/app.py          # opens http://localhost:8501
 
 | Page | What it shows |
 |---|---|
-| Overview | headline numbers vs. FedAvg and the PRD 12.3 acceptance checklist |
+| Overview | headline numbers vs. FedAvg, learning curves, cost vs. accuracy, key findings and the PRD 12.3 acceptance checklist |
+| Benchmark | the four arms, with tabs for learning curves (any logged metric, smoothing, x = rounds or MB), efficiency (rounds and MB to any accuracy threshold), fairness (mean / p10 / worst vehicle, per-car distribution), operations (participation, wall-clock, LR, selection Gini) and every summary metric with the config differences |
 | Fleet (every vehicle) | all cars in one table (filter by region / weather / calibration, CSV export); accuracy per car, worst to best; sensor quality and label similarity vs. accuracy; a drill-down per car (profile, label mix, accuracy every round, when it took part); who-took-part and per-car accuracy heatmaps over rounds; region and weather breakdowns; each car's accuracy under every benchmark method |
-| Benchmark | the four arms round by round: accuracy, uplink MB, loss, ADE, worst-served vehicle |
-| Ablation | each enhancement in isolation (`results/ingredients`, `attribution`, `fix`) |
+| Ablation | each enhancement in isolation (`results/ingredients`, `attribution`, `fix`, or your latest `fedav.cli ablation`), as the change against the FedAvg baseline for any metric |
+| Compare runs | any runs side by side: overlaid curves, final metrics, config keys that differ |
+| Run explorer | any run under `runs/` or `results/`: headline numbers, curves, vehicles per round by outcome, per-round table (CSV), summary and config |
 | Launch a run | set N, C, E, rounds, quality/trajectory-aware, DP ε, top-k, Byzantine defence; start it and watch rounds stream in |
-| Run explorer | any run under `runs/` or `results/`, with per-round table, summary, config and CSV download |
-| Validation | the 14 mathematical-validation figures |
+| Validation | the 14 mathematical-validation figures, each with its explanation |
 
 The dashboard only reads what the framework already writes and launches runs through the same
 CLI below, so nothing in `fedav/` depends on Streamlit.

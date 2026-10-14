@@ -17,9 +17,10 @@ PAGES = [
     ("Fleet (every vehicle)", "step11_dashboard_fleet.png"),
     ("Benchmark", "step12_dashboard_benchmark.png"),
     ("Ablation", "step13_dashboard_ablation.png"),
-    ("Launch a run", "step14_dashboard_launch.png"),
-    ("Run explorer", "step16_dashboard_explorer.png"),
-    ("Validation", "step17_dashboard_validation.png"),
+    ("Compare runs", "step14_dashboard_compare.png"),
+    ("Launch a run", "step15_dashboard_launch.png"),
+    ("Run explorer", "step17_dashboard_explorer.png"),
+    ("Validation", "step18_dashboard_validation.png"),
 ]
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "run_guide")
@@ -72,8 +73,8 @@ def launch_and_capture(page, max_height: int) -> None:
     height = page.evaluate("() => document.querySelector('[data-testid=\"stMain\"]').scrollHeight")
     page.set_viewport_size({"width": 1440, "height": max(900, min(int(height), max_height + 400))})
     page.wait_for_timeout(3000)
-    page.screenshot(path=os.path.join(OUT, "step15_dashboard_launch_finished.png"))
-    print("saved step15_dashboard_launch_finished.png", height)
+    page.screenshot(path=os.path.join(OUT, "step16_dashboard_launch_finished.png"))
+    print("saved step16_dashboard_launch_finished.png", height)
 
 
 if __name__ == "__main__":
