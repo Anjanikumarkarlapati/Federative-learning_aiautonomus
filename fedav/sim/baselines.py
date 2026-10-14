@@ -25,6 +25,7 @@ from torch.utils.data import DataLoader
 from ..config import FLConfig
 from ..data.federated import Fleet
 from ..metrics.evaluation import EvalResult, evaluate, evaluate_fleet
+from ..metrics.fleet import evaluate_vehicles, write_vehicle_profiles, write_vehicle_summary
 from ..metrics.logger import MetricsLogger
 from ..models.perception import build_model, multitask_loss
 from ..utils.seeding import seed_everything
@@ -53,8 +54,10 @@ def fedavg_config(base: FLConfig) -> FLConfig:
     """McMahan-style FedAvg: no quality weighting, no momentum, uncompressed."""
     return base.merged({
         "name": "std_fedavg",
+        # plain weighted mean of raw deltas: FedNova normalisation is part of
+        # the proposed method, not of McMahan FedAvg
         "aggregation": {"quality_aware": False, "server_momentum": 0.0,
-                        "byzantine_robust": False},
+                        "byzantine_robust": False, "normalize_local_steps": False},
         "selection": {"trajectory_aware": False, "uptime_threshold": 0.0,
                       "fairness_k": 10**6},
         "train": {"adaptive_epochs": False, "fedprox_mu": 0.0},
@@ -98,6 +101,7 @@ def run_centralized(cfg: FLConfig, fleet: Fleet, epochs: Optional[int] = None,
     started = time.perf_counter()
     logger = MetricsLogger(cfg.name, cfg.out_dir, cfg.fingerprint(), echo=echo)
     logger.write_config(cfg.to_dict())
+    write_vehicle_profiles(logger.run_dir, fleet)
     epochs = epochs or cfg.train.rounds
     model = build_model(cfg.model, cfg.data.num_classes, cfg.data.traj_horizon, seed=cfg.seed)
     dataset = fleet.pooled_train(augment=cfg.data.augment, seed=cfg.seed)
@@ -132,6 +136,9 @@ def run_centralized(cfg: FLConfig, fleet: Fleet, epochs: Optional[int] = None,
         wall_clock_s=time.perf_counter() - started,
     )
     logger.write_summary(result.summary())
+    write_vehicle_summary(
+        logger.run_dir, evaluate_vehicles(model, fleet, cfg, cfg.device),
+        note="final_* = the pooled-data model on each vehicle's own test split")
     return result
 
 
@@ -143,6 +150,8 @@ def run_local_only(cfg: FLConfig, fleet: Fleet, epochs: Optional[int] = None,
     started = time.perf_counter()
     logger = MetricsLogger(cfg.name, cfg.out_dir, cfg.fingerprint(), echo=echo)
     logger.write_config(cfg.to_dict())
+    write_vehicle_profiles(logger.run_dir, fleet)
+    fleet.reset_augmentation()                   # independent of earlier arms
     epochs = epochs or max(1, cfg.train.rounds * cfg.train.local_epochs // 4)
     test_loader = fleet.test_loader()
 
@@ -153,6 +162,7 @@ def run_local_only(cfg: FLConfig, fleet: Fleet, epochs: Optional[int] = None,
 
     accuracies, maps, ades, fdes, losses = [], [], [], [], []
     per_client: Dict[int, float] = {}
+    own_test: Dict[int, Dict[str, float]] = {}
     best_state, best_accuracy = None, -1.0
     for index, vehicle in enumerate(vehicles, start=1):
         model = build_model(cfg.model, cfg.data.num_classes, cfg.data.traj_horizon,
@@ -163,6 +173,7 @@ def run_local_only(cfg: FLConfig, fleet: Fleet, epochs: Optional[int] = None,
         accuracies.append(result.accuracy); maps.append(result.mAP50)
         ades.append(result.ade); fdes.append(result.fde); losses.append(result.loss)
         per_client[vehicle.client_id] = result.accuracy
+        own_test.update(evaluate_vehicles(model, [vehicle], cfg, cfg.device))
         if result.accuracy > best_accuracy:
             best_accuracy = result.accuracy
             best_state = clone_state(to_float_state(model.state_dict()))
@@ -192,6 +203,9 @@ def run_local_only(cfg: FLConfig, fleet: Fleet, epochs: Optional[int] = None,
         wall_clock_s=time.perf_counter() - started,
     )
     logger.write_summary({**result.summary(), "per_client_accuracy": per_client})
+    write_vehicle_summary(
+        logger.run_dir, own_test,
+        note="final_* = each vehicle's own locally trained model on its own test split")
     return result
 
 

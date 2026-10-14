@@ -24,7 +24,7 @@
   "selection": {
     "clients_trained": 12
   },
-  "wall_clock_s": 270.3,
+  "wall_clock_s": 389.6,
   "per_client_accuracy": {
     "0": 0.25555555555555554,
     "4": 0.2972222222222222,
@@ -39,6 +39,6 @@
     "41": 0.18888888888888888,
     "45": 0.17222222222222222
   },
-  "config_fingerprint": "a4c8271cbd45",
+  "config_fingerprint": "fc90a6dfbc0c",
   "run": "local_only"
 }

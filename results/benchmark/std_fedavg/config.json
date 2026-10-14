@@ -61,6 +61,7 @@
   },
   "aggregation": {
     "quality_aware": false,
+    "normalize_local_steps": false,
     "server_momentum": 0.0,
     "byzantine_robust": false,
     "trim_fraction": 0.1,

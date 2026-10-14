@@ -117,7 +117,7 @@
       "selection": {
         "note": "all vehicles, every epoch"
       },
-      "wall_clock_s": 1143.5
+      "wall_clock_s": 1824.7
     },
     "local_only": {
       "name": "local_only",
@@ -145,26 +145,26 @@
       "selection": {
         "clients_trained": 12
       },
-      "wall_clock_s": 270.3
+      "wall_clock_s": 389.6
     },
     "std_fedavg": {
       "name": "std_fedavg",
-      "accuracy": 0.83,
-      "final_accuracy": 0.83,
-      "mAP50": 0.08922,
-      "ade": 0.19664,
-      "fde": 0.34489,
+      "accuracy": 0.815,
+      "final_accuracy": 0.815,
+      "mAP50": 0.08916,
+      "ade": 0.20617,
+      "fde": 0.36186,
       "rounds_run": 60,
       "rounds_to_target": null,
-      "mb_per_round": 74.561,
-      "total_mb": 4473.658,
+      "mb_per_round": 74.564,
+      "total_mb": 4473.837,
       "converged": true,
       "robustness": {
-        "client_acc_mean": 0.78539,
-        "client_acc_std": 0.13038,
-        "client_acc_min": 0.46341,
-        "client_acc_p10": 0.61998,
-        "client_acc_spread": 0.53659
+        "client_acc_mean": 0.77338,
+        "client_acc_std": 0.13794,
+        "client_acc_min": 0.32653,
+        "client_acc_p10": 0.6034,
+        "client_acc_spread": 0.67347
       },
       "privacy": {
         "mode": "no DP noise",
@@ -176,26 +176,26 @@
         "selection_gini": 0.5376888888888889,
         "mean_participation": 18.0
       },
-      "wall_clock_s": 1956.9
+      "wall_clock_s": 21749.6
     },
     "proposed_fl": {
       "name": "proposed_fl",
-      "accuracy": 0.84667,
-      "final_accuracy": 0.84667,
-      "mAP50": 0.10042,
-      "ade": 0.20174,
-      "fde": 0.35464,
+      "accuracy": 0.82167,
+      "final_accuracy": 0.82167,
+      "mAP50": 0.09597,
+      "ade": 0.19826,
+      "fde": 0.3497,
       "rounds_run": 60,
       "rounds_to_target": null,
-      "mb_per_round": 8.7221,
-      "total_mb": 523.327,
+      "mb_per_round": 8.7094,
+      "total_mb": 522.561,
       "converged": false,
       "robustness": {
-        "client_acc_mean": 0.79369,
-        "client_acc_std": 0.1369,
-        "client_acc_min": 0.32653,
-        "client_acc_p10": 0.63098,
-        "client_acc_spread": 0.67347
+        "client_acc_mean": 0.78116,
+        "client_acc_std": 0.13285,
+        "client_acc_min": 0.40816,
+        "client_acc_p10": 0.62457,
+        "client_acc_spread": 0.59184
       },
       "privacy": {
         "mode": "no DP noise",
@@ -207,13 +207,13 @@
         "selection_gini": 0.46853333333333325,
         "mean_participation": 18.0
       },
-      "wall_clock_s": 3794.7
+      "wall_clock_s": 3496.7
     }
   },
   "acceptance": {
     "accuracy_target": {
       "requirement": "accuracy >= 90.00%",
-      "observed": 0.8467,
+      "observed": 0.8217,
       "pass": false
     },
     "convergence_speedup": {
@@ -225,21 +225,21 @@
     },
     "communication_saving": {
       "requirement": "MB/round cut by >= 30% vs standard FedAvg",
-      "proposed_mb": 8.7221,
-      "fedavg_mb": 74.561,
-      "reduction": 0.883,
+      "proposed_mb": 8.7094,
+      "fedavg_mb": 74.564,
+      "reduction": 0.8832,
       "pass": true
     },
     "communication_budget": {
       "requirement": "MB/round <= 9.0",
-      "observed": 8.7221,
+      "observed": 8.7094,
       "pass": true
     },
     "non_iid_robustness": {
       "requirement": "cross-client accuracy dispersion <= standard FedAvg",
-      "proposed_std": 0.1369,
-      "fedavg_std": 0.13038,
-      "pass": false
+      "proposed_std": 0.13285,
+      "fedavg_std": 0.13794,
+      "pass": true
     },
     "convergence_speedup_relative": {
       "requirement": "rounds to 95% of the centralized ceiling, cut by >= 25%",
@@ -252,8 +252,8 @@
     "accuracy_vs_ceiling": {
       "requirement": "proposed accuracy >= 95% of the centralized ceiling",
       "centralized": 0.8989,
-      "proposed": 0.8467,
-      "ratio": 0.9419,
+      "proposed": 0.8217,
+      "ratio": 0.9141,
       "pass": false
     },
     "privacy": {
