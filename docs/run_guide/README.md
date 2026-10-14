@@ -37,7 +37,7 @@ Python 3.11+ works (these captures used 3.13). Check the key packages are there:
 python -m pytest -q
 ```
 
-All tests should pass before you trust any numbers:
+All 73 tests should pass before you trust any numbers:
 
 ![Step 2](step02_tests.png)
 
@@ -112,7 +112,11 @@ quick config the communication and fairness checks pass; the accuracy checks nee
 python -m fedav.cli ablation --config configs/quick.yaml
 ```
 
-Switches each enhancement on by itself to show which one does the work.
+Switches each enhancement on by itself to show which one does the work. The CLI prints the full
+JSON (also saved to `runs/ablation.json`); `python scripts/ablation_table.py` condenses it into
+the table below. On the 8-round quick config only top-k compression (`proposed_full`: 3.8 vs
+19.9 MB/round) and selection (lower client spread) move the numbers clearly. The DP arm's
+trajectory error blows up at this tiny scale (ADE ≈ 3583); use the full config to judge DP.
 
 ![Step 8](step08_ablation.png)
 

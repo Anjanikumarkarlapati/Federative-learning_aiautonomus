@@ -66,9 +66,9 @@ if [ -z "${SKIP_SLOW:-}" ]; then
 
   echo "Step 8: ablation"
   python -m fedav.cli ablation --config configs/quick.yaml > "$TMP/abl.txt" 2>&1
-  grep -v -E "^\[" "$TMP/abl.txt" > "$TMP/cur.txt"
+  python scripts/ablation_table.py runs/ablation.json > "$TMP/cur.txt"
   shot step08_ablation.png "Step 8 - Ablation: which enhancement does the work" \
-    "python -m fedav.cli ablation --config configs/quick.yaml" --width 120
+    "python -m fedav.cli ablation --config configs/quick.yaml && python scripts/ablation_table.py"
 fi
 
 printf '\n  You can now view your Streamlit app in your browser.\n\n  Local URL: http://localhost:8501\n  Network URL: http://<your-machine-ip>:8501\n\n  (open the Local URL in a browser; press Ctrl+C here to stop)\n' > "$TMP/cur.txt"

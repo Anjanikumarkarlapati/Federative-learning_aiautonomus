@@ -38,6 +38,9 @@ section. It builds on **FedAvg** and adds the four enhancements the PRD specifie
 
 ## 2. Quick start
 
+> **Step-by-step with screenshots:** [docs/run_guide/README.md](docs/run_guide/README.md) shows
+> every command below and every dashboard page, with what the output looks like.
+
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
