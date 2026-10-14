@@ -133,6 +133,18 @@ def report() -> Dict:
         lines.append(f"| {label} | " + " | ".join(
             stats.fmt(agg["paired_vs_reference"][a].get(m, {}), scale, d)
             for a in arms if a != "base") + " |")
+    lines += ["", "## Reading (14 Oct 2026 run)", "",
+              "* The setting is too hard to resolve most options: base accuracy is ~23% after 20 "
+              "rounds on 9 classes (chance 11%), and **rare-hazard accuracy is 0% in every arm and "
+              "seed** - at a 6% rare share the model never predicts a hazard class in this budget, "
+              "so this run cannot test whether focal loss or the KST score helps rare hazards.",
+              "* Only two differences have a 95% CI excluding zero, both costs: SCAFFOLD adds "
+              "~4.2 MB/round (the control-variate uplink), and `kst_ucb` selection delivers ~0.6 "
+              "fewer vehicle updates per round (uptime is no longer a gate). SCAFFOLD's +2.0 points "
+              "of last-5 accuracy is borderline.",
+              "* No option, and not all options together, measurably improves accuracy, worst-"
+              "vehicle or worst-10% accuracy here. A longer run (more rounds, larger rare share) is "
+              "needed before any of them is claimed."]
     with open(os.path.join(OUT, "options.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
     return out
