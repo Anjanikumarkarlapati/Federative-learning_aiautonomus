@@ -105,17 +105,30 @@ class V2XRadioModel:
         return 10.0 ** ((self.tx_power_dbm - 30.0) / 10.0)
 
     # ------------------------------------------------------------------ public
-    def sample(self, size_bytes: int, region: str, generator: np.random.Generator) -> LinkSample:
+    def draw_link(self, region: str, generator: np.random.Generator) -> Tuple[float, bool, float]:
+        """This round's geometry for one vehicle: (distance m, LOS, shadowing dB)."""
         lo, hi = self.regions.get(region, self.regions["urban"])
         d = float(generator.uniform(lo, hi))
         los = bool(generator.random() < self.los_probability(d))
         shadow = float(generator.normal(0.0, 4.0 if los else 7.82))
+        return d, los, shadow
+
+    def predicted_rate_mbps(self, d: float, los: bool) -> float:
+        """What the RSU can predict from the vehicle's reported position: the
+        mean path loss, without the shadowing it cannot know in advance."""
+        return self.rate_mbps(self.tx_power_dbm - self.path_loss_db(d, los) - self.noise_dbm())
+
+    def transmit(self, size_bytes: int, link: Tuple[float, bool, float]) -> LinkSample:
+        d, los, shadow = link
         pl = self.path_loss_db(d, los) + shadow
         snr_db = self.tx_power_dbm - pl - self.noise_dbm()
         rate = self.rate_mbps(snr_db)
         airtime = self.access_latency_s + size_bytes * 8.0 / (rate * 1e6)
         energy = self.tx_power_w() / self.pa_efficiency * airtime
         return LinkSample(d, los, pl, snr_db, rate, airtime, energy)
+
+    def sample(self, size_bytes: int, region: str, generator: np.random.Generator) -> LinkSample:
+        return self.transmit(size_bytes, self.draw_link(region, generator))
 
     def airtime_s(self, size_bytes: int, rate_mbps: float) -> float:
         """Airtime for a given payload at a known rate (for analytic checks)."""

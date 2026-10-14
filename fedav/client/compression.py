@@ -62,6 +62,13 @@ class TopKCompressor:
         density = float(sum(int((v != 0).sum()) for v in sparse.values())) / total
         return sparse, density
 
+    def restore(self, client_id: int, sent: StateDict) -> None:
+        """NACK: the upload never arrived, so its coordinates go back into the
+        residual instead of being lost - the next upload carries them."""
+        residual = self.residuals.get(client_id)
+        self.residuals[client_id] = (dict(sent) if residual is None
+                                     else {k: residual[k] + sent[k] for k in residual})
+
     def clear(self, client_id: Optional[int] = None) -> None:
         if client_id is None:
             self.residuals.clear()

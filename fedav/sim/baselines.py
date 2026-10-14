@@ -40,11 +40,10 @@ def proposed_config(base: FLConfig) -> FLConfig:
         "name": "proposed_fl",
         "aggregation": {"quality_aware": True, "server_momentum": 0.9,
                         "normalize_local_steps": True},
-        "selection": {"trajectory_aware": True},
+        "selection": {"mode": "aware", "trajectory_aware": True},
         # adaptive_epochs stays off: measured net-negative even with FedNova
         # normalisation (README section 9).
         "train": {"adaptive_epochs": False},
-        "aggregation": {"normalize_local_steps": True},
         "comm": {"fp16": True, "send_deltas": True, "multicast": True,
                  "topk_ratio": 0.25, "adaptive_sparsity": True},
     })
@@ -58,12 +57,30 @@ def fedavg_config(base: FLConfig) -> FLConfig:
         # the proposed method, not of McMahan FedAvg
         "aggregation": {"quality_aware": False, "server_momentum": 0.0,
                         "byzantine_robust": False, "normalize_local_steps": False},
-        "selection": {"trajectory_aware": False, "uptime_threshold": 0.0,
-                      "fairness_k": 10**6},
+        "selection": {"mode": "uniform", "trajectory_aware": False,
+                      "uptime_threshold": 0.0, "fairness_k": 10**6},
         "train": {"adaptive_epochs": False, "fedprox_mu": 0.0},
         "comm": {"fp16": False, "send_deltas": False, "broadcast_delta": False,
                  "multicast": False, "topk_ratio": 1.0, "adaptive_sparsity": False},
         "dp": {"enabled": False, "secure_aggregation": False},
+    })
+
+
+def fedavg_transport_config(base: FLConfig) -> FLConfig:
+    """FedAvg algorithm on the proposed transport stack.
+
+    Same aggregation and selection as :func:`fedavg_config`, but deltas go over
+    the wire as fp16 + gzip top-k with error feedback, multicast downlink and the
+    MB-budget controller - so a comparison with the proposed arm isolates what
+    the claimed mechanisms add beyond known compression.
+    """
+    cfg = fedavg_config(base)
+    return cfg.merged({
+        "name": "fedavg_transport",
+        "comm": {"fp16": True, "send_deltas": True, "broadcast_delta": True,
+                 "multicast": True, "topk_ratio": base.comm.topk_ratio,
+                 "error_feedback": True, "adaptive_sparsity": True,
+                 "nack_retention": False},
     })
 
 

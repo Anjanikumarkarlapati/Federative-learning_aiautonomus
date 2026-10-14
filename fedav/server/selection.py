@@ -67,6 +67,8 @@ class ClientSelector:
     def select(self, profiles: Sequence[VehicleProfile], round_id: int) -> SelectionResult:
         cfg = self.cfg
         target = min(self.target_size(), len(profiles))
+        if cfg.mode == "uniform":
+            return self._select_uniform(profiles, round_id, target)
         uptimes = {p.client_id: self._link_sample(p, round_id) for p in profiles}
 
         threshold, relaxed = cfg.uptime_threshold, False
@@ -79,8 +81,10 @@ class ClientSelector:
             eligible = list(profiles)
             relaxed = True
 
-        # 1. fairness guard - starved vehicles first
-        starved = [p for p in eligible
+        # 1. fairness guard - starved vehicles first. It runs *before* the uptime
+        #    gate: a vehicle with a weak link is still owed a slot every K rounds,
+        #    otherwise the bound only holds for vehicles that never needed it.
+        starved = [p for p in profiles
                    if round_id - self.last_seen[p.client_id] > cfg.fairness_k
                    or self.last_seen[p.client_id] < 0]
         starved.sort(key=lambda p: (self.last_seen[p.client_id], -uptimes[p.client_id]))
@@ -114,6 +118,18 @@ class ClientSelector:
             self.times_selected[client_id] += 1
         return SelectionResult(selected=sorted(chosen), eligible=len(eligible),
                                forced_fairness=forced, relaxed=relaxed)
+
+    def _select_uniform(self, profiles: Sequence[VehicleProfile], round_id: int,
+                        target: int) -> SelectionResult:
+        """McMahan FedAvg: ``target`` vehicles uniformly at random, no link or
+        quality information used."""
+        generator = make_rng(self.seed, round_id, 17)
+        ids = [p.client_id for p in profiles]
+        chosen = sorted(int(c) for c in generator.choice(ids, size=target, replace=False))
+        for client_id in chosen:
+            self.last_seen[client_id] = round_id
+            self.times_selected[client_id] += 1
+        return SelectionResult(selected=chosen, eligible=len(profiles))
 
     def _score(self, profile: VehicleProfile, uptime: float) -> float:
         """Prefer stable links and larger, healthier shards; mild inverse-count

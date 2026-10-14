@@ -23,6 +23,7 @@ run that hits ``R_max`` without converging still returns a usable model
 """
 from __future__ import annotations
 
+import math
 import os
 import time
 from dataclasses import dataclass, field
@@ -44,13 +45,14 @@ from ..metrics.logger import MetricsLogger
 from ..models.perception import build_model
 from ..privacy.dp import PrivacyAccountant
 from ..server.aggregator import ContributedUpdate, FedAggregator, has_converged
-from ..server.secure import SecureAggregationMasks, SecureChannel
+from ..server.secure import SecureChannel
 from ..server.selection import ClientSelector
+from ..server import secagg
 from ..server.v2x import V2XRadioModel
 from ..utils.seeding import rng as make_rng, seed_everything
-from ..utils.tensors import (StateDict, clone_state, state_add, state_norm,
+from ..utils.tensors import (StateDict, clone_state, flatten, state_add, state_norm,
                              state_numel, state_sub, state_zeros_like,
-                             to_float_state, weighted_average)
+                             to_float_state, unflatten, weighted_average)
 
 
 @dataclass
@@ -123,7 +125,11 @@ class SimRunner:
                                               cfg.fingerprint(), echo=echo)
         self._last_sync: Dict[int, int] = {}      # client -> round whose model it holds
         self.vehicles = VehicleTracker(self.logger.run_dir, self.fleet)
-        self._mask_scale = 1e-2                   # matched to the update magnitude
+        # quality-hiding secure aggregation state (claims K1 / K2)
+        self._keys: Dict[int, secagg.KeyPair] = {}
+        self._sa_residual: Dict[int, np.ndarray] = {}   # on-vehicle, step-normalised units
+        self._prev_update: Optional[np.ndarray] = None  # last broadcast global delta (public)
+        self._value_bound: Optional[float] = None
         self.accountant: Optional[PrivacyAccountant] = None
         if cfg.dp.enabled:
             sampling_rate = min(1.0, cfg.selection.fraction)
@@ -200,6 +206,7 @@ class SimRunner:
                 events[client_id] = {"status": "straggler", **event}
                 continue
             payload = self.compressor.compress(client_id, update.delta)
+            sent = payload
             if not self.cfg.comm.send_deltas:
                 # Classic FedAvg puts the full local weights on the wire; the
                 # server differences them against w^(r) to recover the update.
@@ -217,7 +224,9 @@ class SimRunner:
             if not delivered:
                 stats["dropped"] += 1              # PRD 16: client drops mid-round
                 events[client_id] = {"status": "dropped", **event}
+                self._nack(client_id, sent)
                 continue
+            blob = self._maybe_corrupt(blob, round_id, client_id)
             try:
                 delta, meta = self.serializer.unpack(blob)
                 if not self.cfg.comm.send_deltas:
@@ -225,6 +234,7 @@ class SimRunner:
             except ChecksumError:
                 stats["corrupt"] += 1
                 events[client_id] = {"status": "corrupt", **event}
+                self._nack(client_id, sent)
                 continue
             events[client_id] = {"status": "reported", "uplink_kb": round(len(blob) / 1024, 2),
                                  **event}
@@ -233,6 +243,202 @@ class SimRunner:
                 q_k=float(meta["q_k"]), steps=int(meta.get("steps", 1))))
             raw_updates.append(update)
         return contributed, raw_updates, stats, events
+
+    # ---------------------------------------------- quality-hiding secure round
+    def _weight(self, q_k: float, n_k: int) -> float:
+        a = self.cfg.aggregation
+        n_ref = max(self.cfg.data.samples_per_client * self.cfg.data.train_share, 1.0)
+        q = float(np.clip(q_k, a.q_min, a.q_max)) if a.quality_aware else 1.0
+        return float(min(q * n_k / n_ref, a.q_max * a.weight_cap))
+
+    def _secure_round(self, selected: List[int], round_id: int) -> Dict[str, Any]:
+        """One round of K1 + K2 (see fedav/server/secagg.py).
+
+        Vehicles train, fold ``w_k`` and ``tau_k`` into a masked fixed-point
+        payload over a shared, tiered support, and transmit it. The RSU sums what
+        arrives, removes dropped vehicles' masks and normalises. Per-vehicle
+        ``q_k`` / ``alpha`` in the telemetry are the simulator's ground truth for
+        plotting; the aggregation path never reads them.
+        """
+        cfg = self.cfg
+        dp_sigma = 0.0
+        if self.accountant is not None:
+            dp_sigma = self.accountant.client_sigma(len(selected))
+        keys = list(self.global_state.keys())
+        numel = state_numel(self.global_state)
+        # the MB-budget controller adapts the top tier exactly as it adapts top-k
+        top_ratio = min(self.compressor.ratio, 1.0)
+        full = max(1, int(round(top_ratio * numel)))
+        smallest = max(1, int(round(min(cfg.comm.min_topk_ratio, top_ratio) * numel)))
+        ladder = secagg.tier_ladder(full, smallest, cfg.comm.tier_levels)
+        support = secagg.shared_support(self._prev_update, numel, full, cfg.seed, round_id)
+        w_max = cfg.aggregation.q_max * cfg.aggregation.weight_cap
+        if self._value_bound is None:
+            self._value_bound = 0.05 * w_max
+        value_fp = secagg.FixedPoint(self._value_bound)
+        # public bound on w * tau: weight cap times the most local steps any vehicle can take
+        n_ref = max(cfg.data.samples_per_client * cfg.data.train_share, 1.0)
+        tau_cap = (max(cfg.train.local_epochs, cfg.train.max_epochs)
+                   * math.ceil(cfg.aggregation.weight_cap * n_ref / cfg.train.batch_size + 1))
+        scalar_fp = secagg.FixedPoint(float(w_max * tau_cap))
+
+        # key setup: each selected vehicle publishes g^a once; the RSU multicasts the list
+        for c in selected:
+            if c not in self._keys:
+                self._keys[c] = secagg.keypair(cfg.seed, c)
+                self.channel.stats.uplink_bytes += secagg.PUBLIC_KEY_BYTES
+        self.channel.stats.downlink_bytes += secagg.PUBLIC_KEY_BYTES * len(selected)
+
+        # links this round; the RSU predicts rates from position, not shadowing
+        links = {c: self.radio.draw_link(self.fleet[c].profile.region,
+                                         make_rng(cfg.seed, round_id, 91, c)) for c in selected}
+        predicted = {c: self.radio.predicted_rate_mbps(d, los) for c, (d, los, _) in links.items()}
+        tiers = secagg.assign_tiers(predicted, ladder, cfg.comm.airtime_budget_s)
+        self.channel.stats.downlink_bytes += 2 * len(selected)          # tier ids
+
+        stats = {"dropped": 0, "straggler": 0, "corrupt": 0}
+        events: Dict[int, Dict[str, Any]] = {}
+        raw_updates: List[ClientUpdate] = []
+        arrived: Dict[int, np.ndarray] = {}
+        truth: Dict[int, Tuple[float, float, np.ndarray]] = {}
+        clipped = sent_values = scalar_clipped = 0
+        generator = make_rng(cfg.seed, round_id, 55)
+        pubs = {c: self._keys[c].public for c in selected}
+
+        trained: Dict[int, ClientUpdate] = {}
+        for c in selected:
+            vehicle = self.fleet[c]
+            update = self.trainer.train(self.global_state, vehicle, round_id,
+                                        self.fleet.reference_histogram, dp_sigma)
+            events[c] = {"q_k": round(float(update.q_k), 5),
+                         "local_epochs": int(update.local_epochs),
+                         "train_loss": round(float(update.train_loss), 5),
+                         "update_norm": round(float(update.update_norm), 6),
+                         "train_seconds": round(float(update.duration_s), 3),
+                         "tier": int(tiers[c])}
+            if update.duration_s > cfg.selection.round_timeout_s:
+                stats["straggler"] += 1
+                events[c]["status"] = "straggler"
+                continue
+            trained[c] = update
+        # vehicles that timed out never upload: treat them as dropped for masking
+        for c in selected:
+            if c not in trained:
+                continue
+            update = trained[c]
+            tau = float(max(int(update.steps), 1))
+            u = flatten(update.delta, keys).double().numpy()
+            if cfg.aggregation.normalize_local_steps:
+                u = u / tau
+            if c in self._sa_residual and cfg.comm.error_feedback:
+                u = u + self._sa_residual[c]
+            w = self._weight(update.q_k, update.n_k)
+            scalar_clipped += int(w * tau > scalar_fp.bound)
+            length = ladder[tiers[c]]
+            values = u[support[:length]]
+            up = secagg.vehicle_encode(c, round_id, self._keys[c], pubs, tiers, ladder,
+                                       tiers[c], values, w, tau, value_fp, scalar_fp)
+            clipped += int(np.count_nonzero(np.abs(w * values) > value_fp.bound))
+            sent_values += length
+            residual = u.copy()
+            residual[support[:length]] = up.clipped_excess        # sent part leaves
+            delivered, wire_bytes, _ = self.channel.send_up(
+                up.payload, self.fleet[c].profile.link_uptime, generator)
+            link = self.radio.transmit(wire_bytes, links[c])
+            events[c].update({"airtime_s": round(link.airtime_s, 5),
+                              "radio_energy_j": round(link.energy_j, 5),
+                              "rate_mbps": round(link.rate_mbps, 3),
+                              "distance_m": round(link.distance_m, 1),
+                              "uplink_kb": round(wire_bytes / 1024, 2)})
+            blob = self._maybe_corrupt(up.payload, round_id, c) if delivered else None
+            ok = False
+            if delivered:
+                try:
+                    _, _, _, vec = secagg.parse_upload(blob)
+                    ok = True
+                except secagg.PayloadError:
+                    stats["corrupt"] += 1
+                    events[c]["status"] = "corrupt"
+            else:
+                stats["dropped"] += 1
+                events[c]["status"] = "dropped"
+            if ok:
+                arrived[c] = vec
+                events[c]["status"] = "reported"
+                truth[c] = (w, tau, values - up.clipped_excess)
+                raw_updates.append(update)
+            elif not cfg.comm.nack_retention:
+                pass                                        # sent coordinates are lost
+            else:
+                residual = u                                # NACK: keep everything
+            if cfg.comm.error_feedback:
+                self._sa_residual[c] = residual
+
+        out: Dict[str, Any] = {"stats": stats, "events": events, "raw_updates": raw_updates,
+                               "arrived": list(arrived), "aggregated": None}
+        if not arrived:
+            return out
+        # every selected vehicle masked against every other, so stragglers count
+        # as dropped too and survivors reveal their seeds with them
+        sums = secagg.rsu_aggregate(arrived, tiers, self._keys, round_id,
+                                    ladder, value_fp, scalar_fp)
+        self.channel.stats.uplink_bytes += secagg.SEED_REVEAL_BYTES * sums.seeds_revealed
+        d_support = secagg.combine_segments(sums, ladder, cfg.aggregation.normalize_local_steps)
+        flat = np.zeros(numel, dtype=np.float64)
+        flat[support] = d_support
+        aggregated = unflatten(torch.from_numpy(flat).float(), self.global_state)
+
+        # simulator-only oracle: the same aggregate from plaintext values
+        expected = np.zeros(full)
+        start = 0
+        for t, end in enumerate(ladder):
+            cover = [c for c in arrived if tiers[c] >= t]
+            if cover:
+                W = sum(truth[c][0] for c in cover)
+                T = sum(truth[c][0] * truth[c][1] for c in cover)
+                S = sum(truth[c][0] * truth[c][2][start:end] for c in cover)
+                expected[start:end] = ((T / W) if cfg.aggregation.normalize_local_steps
+                                       else 1.0) * S / W
+            start = end
+        err = float(np.linalg.norm(d_support - expected) / max(np.linalg.norm(expected), 1e-12))
+        weights = np.array([truth[c][0] for c in arrived])
+        out.update({
+            "aggregated": aggregated,
+            "alphas": weights / weights.sum(),
+            "contributed": [ContributedUpdate(client_id=c, delta={}, n_k=self.fleet[c].profile.n_k,
+                                              q_k=float(events[c]["q_k"]),
+                                              steps=int(truth[c][1])) for c in arrived],
+            "secure_ok": err <= 1e-3,
+            "secagg": {"secagg_rel_error": round(err, 8),
+                       "secagg_clip_frac": round(clipped / max(sent_values, 1), 6),
+                       "secagg_scalar_clipped": scalar_clipped,
+                       "secagg_value_bound": round(value_fp.bound, 8),
+                       "secagg_seeds_revealed": sums.seeds_revealed,
+                       "secagg_mean_tier": round(float(np.mean([tiers[c] for c in trained])), 3),
+                       "secagg_support": full},
+        })
+        for c, a in zip(arrived, out["alphas"]):
+            events[c]["alpha"] = round(float(a), 5)
+        self._value_bound = max(4.0 * w_max * float(np.max(np.abs(d_support))), 1e-6)
+        return out
+
+    def _nack(self, client_id: int, sent: StateDict) -> None:
+        if (self.cfg.comm.nack_retention and self.cfg.comm.send_deltas
+                and self.compressor.ratio < 1.0 and self.compressor.error_feedback):
+            self.compressor.restore(client_id, sent)
+
+    def _maybe_corrupt(self, blob: bytes, round_id: int, client_id: int) -> bytes:
+        """Fault injection: flip one byte with probability ``comm.corrupt_prob``."""
+        p = self.cfg.comm.corrupt_prob
+        if p <= 0:
+            return blob
+        g = make_rng(self.cfg.seed, round_id, 93, client_id)
+        if g.random() >= p:
+            return blob
+        raw = bytearray(blob)
+        pos = int(g.integers(len(raw) // 2, len(raw)))
+        raw[pos] ^= 0xFF
+        return bytes(raw)
 
     @staticmethod
     def _radio_totals(events: Dict[int, Dict[str, Any]]) -> Dict[str, float]:
@@ -256,42 +462,6 @@ class SimRunner:
                 "uplink_energy_j_per_round": round(energy / rounds, 4),
                 "uplink_energy_j_total": round(energy, 3)}
 
-    def _secure_sum(self, updates: List[ContributedUpdate], alphas: np.ndarray,
-                    round_id: int) -> Tuple[StateDict, bool]:
-        """Masked weighted sum: the RSU sees only the total (PRD 8.7).
-
-        Each vehicle uploads ``alpha_k dW_k + mask_k``; the pairwise masks cancel
-        in the sum, so the server recovers ``sum_k alpha_k dW_k`` exactly and
-        nothing about any individual ``dW_k``.
-
-        The mask magnitude is set from the round's own reported update norms -
-        already part of the PRD 8.6 message schema, and already exchanged in the
-        first phase that establishes the ``alpha`` normaliser, so this costs no
-        extra round trip and reveals no individual update beyond the scalar norm
-        the protocol already carries. Scale-matching is not cosmetic: a mask fixed
-        at 1.0 against a converged update of norm 0.01 is a 10^4 : 1 cancellation
-        that blows past the verification tolerance (it did, in 56 of 60 rounds,
-        before this was fixed).
-        """
-        participants = [u.client_id for u in updates]
-        expected = weighted_average([u.delta for u in updates], alphas.tolist())
-        scale = SecureAggregationMasks.scale_for(
-            float(np.dot(alphas, [state_norm(u.delta) for u in updates])),
-            state_numel(expected),
-        )
-        self._mask_scale = scale
-        masks = SecureAggregationMasks(round_id=round_id, participants=participants,
-                                       secret=self.cfg.seed, scale=scale)
-        total = OrderedDict((k, torch.zeros(v.shape, dtype=torch.float64))
-                            for k, v in expected.items())
-        for update, alpha in zip(updates, alphas):
-            masked = masks.apply({k: v * float(alpha) for k, v in update.delta.items()},
-                                 update.client_id)
-            for key in total:
-                total[key] += masked[key]
-        recovered = OrderedDict((k, v.to(torch.float32)) for k, v in total.items())
-        residual = state_norm(state_sub(recovered, expected))
-        return recovered, bool(residual <= 1e-3 * max(state_norm(expected), 1e-12))
 
     # -------------------------------------------------------------------- run
     def run(self) -> RunResult:
@@ -323,8 +493,15 @@ class SimRunner:
             previous_broadcast = clone_state(self.global_state)
 
             # (4-8) local training + uplink
-            contributed, raw_updates, drop_stats, events = self._collect(
-                selection.selected, round_id)
+            secure_round = cfg.dp.secure_aggregation and not cfg.aggregation.byzantine_robust
+            secagg_stats: Dict[str, Any] = {}
+            if secure_round:
+                sr = self._secure_round(selection.selected, round_id)
+                raw_updates, drop_stats, events = sr["raw_updates"], sr["stats"], sr["events"]
+                contributed = sr.get("contributed", [])
+            else:
+                contributed, raw_updates, drop_stats, events = self._collect(
+                    selection.selected, round_id)
             if not contributed:
                 self.vehicles.log_round(round_id, events)
                 self.logger.log({"round": round_id, "clients_selected": len(selection.selected),
@@ -333,23 +510,28 @@ class SimRunner:
                 continue
 
             rejected: List[int] = []
-            if cfg.aggregation.byzantine_robust:
+            if secure_round:
+                aggregated, alphas = sr["aggregated"], sr["alphas"]
+                secure_ok, secagg_stats = sr["secure_ok"], sr["secagg"]
+            elif cfg.aggregation.byzantine_robust:
                 contributed, rejected = FedAggregator.norm_filter(contributed)
                 for client_id in rejected:
                     events[client_id]["status"] = "rejected"
 
-            # (9) quality-aware FedAvg, optionally through secure aggregation
-            aggregated, alphas = self.aggregator.combine(contributed)
-            for update, alpha in zip(contributed, alphas):
-                events[update.client_id]["alpha"] = round(float(alpha), 5)
-            secure_ok = False
-            if cfg.dp.secure_aggregation and not cfg.aggregation.byzantine_robust:
-                aggregated, secure_ok = self._secure_sum(contributed, alphas, round_id)
+            # (9) quality-aware FedAvg; the secure path already aggregated in the masked domain
+            if not secure_round:
+                aggregated, alphas = self.aggregator.combine(contributed)
+                for update, alpha in zip(contributed, alphas):
+                    events[update.client_id]["alpha"] = round(float(alpha), 5)
+                secure_ok = False
             previous_state = self.global_state
             self.global_state, report = self.aggregator.apply(
                 previous_state, aggregated, alphas,
                 [u.client_id for u in contributed], rejected,
             )
+            if secure_round:     # every vehicle derives next round's support from this
+                self._prev_update = flatten(state_sub(self.global_state, previous_state),
+                                            list(self.global_state.keys())).double().numpy()
             if self.accountant is not None:
                 self.accountant.step()
 
@@ -379,6 +561,7 @@ class SimRunner:
                 "selection_relaxed": selection.relaxed,
                 "mb_round": round(round_mb, 5),
                 **self._radio_totals(events),
+                **secagg_stats,
                 "mb_cumulative": round(total_mb, 4),
                 "delta_norm": round(distance, 6),
                 "aggregate_norm": round(report.update_norm, 6),

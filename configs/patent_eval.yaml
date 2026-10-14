@@ -1,0 +1,89 @@
+# Reduced setting for the multi-seed patent evidence (scripts/run_patent_evidence.py).
+# Same fleet model as configs/default.yaml (N = 50, C = 0.3, Dirichlet 0.4), with
+# fewer local epochs and rounds so several seeds x arms fit in CPU hours.
+name: patent_eval
+num_clients: 50
+seed: 1337
+device: cpu
+out_dir: results/patent
+
+data:
+  num_classes: 6
+  image_size: 32
+  traj_horizon: 6
+  samples_per_client: 220
+  quantity_skew: 0.45
+  dirichlet_alpha: 0.4
+  feature_skew: true
+  train_share: 0.70
+  val_share: 0.15
+  test_share: 0.15
+  global_test_size: 480
+  augment: true
+
+model:
+  width: 1.0
+  stem_channels: 24
+  embed_dim: 192
+  dropout: 0.05
+  lambda_box: 1.0
+  lambda_traj: 0.5
+  max_parameters: 6000000
+
+train:
+  rounds: 30
+  local_epochs: 2
+  adaptive_epochs: false
+  min_epochs: 1
+  max_epochs: 8
+  lr: 0.01
+  cosine_decay: true
+  momentum: 0.9
+  weight_decay: 0.0005
+  batch_size: 32
+  fedprox_mu: 0.0
+  tolerance: 0.0           # run every round: the evidence compares fixed budgets
+  target_accuracy: 0.60
+  grad_clip: 5.0
+
+selection:
+  mode: aware
+  fraction: 0.3
+  uptime_threshold: 0.55
+  trajectory_aware: true
+  fairness_k: 12
+  min_clients: 2
+  round_timeout_s: 45.0
+
+aggregation:
+  quality_aware: true
+  normalize_local_steps: true
+  server_momentum: 0.9
+  byzantine_robust: false
+  trim_fraction: 0.1
+  q_min: 0.05
+  q_max: 1.0
+  weight_cap: 4.0
+
+dp:
+  enabled: false
+  clip_norm: 1.0
+  epsilon: 8.0
+  delta: 0.00001
+  secure_aggregation: true
+
+comm:
+  fp16: true
+  gzip_level: 6
+  send_deltas: true
+  broadcast_delta: true
+  multicast: true
+  topk_ratio: 0.25
+  error_feedback: true
+  min_topk_ratio: 0.02
+  adaptive_sparsity: true
+  mb_budget_per_round: 9.0
+  nack_retention: true
+  airtime_budget_s: 0.0    # set per arm by the evidence script
+  tier_levels: 5
+  corrupt_prob: 0.02

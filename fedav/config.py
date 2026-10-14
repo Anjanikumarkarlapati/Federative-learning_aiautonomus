@@ -60,6 +60,7 @@ class DPConfig:
 class SelectionConfig:
     """Connectivity / trajectory aware client selection (PRD 8.5)."""
 
+    mode: str = "aware"                   # "aware" (PRD 8.5) | "uniform" (McMahan FedAvg)
     fraction: float = 0.3                 # C
     uptime_threshold: float = 0.55        # minimum V2I link uptime to be eligible
     trajectory_aware: bool = True         # spread selection over regions
@@ -80,6 +81,7 @@ class AggregationConfig:
     trim_fraction: float = 0.1
     q_min: float = 0.05                   # clamp for q_k (PRD 18: q_k mis-estimation)
     q_max: float = 1.0
+    weight_cap: float = 4.0               # w_k = q_k n_k / n_ref is capped at q_max * weight_cap
 
 
 @dataclass
@@ -119,6 +121,10 @@ class CommConfig:
     min_topk_ratio: float = 0.02
     adaptive_sparsity: bool = True        # close the loop on the MB budget
     mb_budget_per_round: float = 9.0      # NFR: <= 9 MB/round at target config
+    nack_retention: bool = True           # failed upload -> vehicle keeps the whole update
+    airtime_budget_s: float = 0.0         # > 0: secure-agg tiers share this uplink airtime
+    tier_levels: int = 5                  # prefix lengths on the shared support
+    corrupt_prob: float = 0.0             # per-upload probability of a corrupted payload
 
 
 @dataclass
