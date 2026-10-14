@@ -368,3 +368,59 @@ def compare_arms_per_vehicle(base_dir: Optional[str] = None) -> pd.DataFrame:
         if not s.empty and "final_accuracy" in s:
             cols[arm] = s.set_index("client_id")["final_accuracy"]
     return pd.DataFrame(cols)
+
+
+# ------------------------------------------------------------ patent evidence
+
+PATENT_ARMS = {"std_fedavg": "A · Std. FedAvg", "fedavg_transport": "B · FedAvg + same transport",
+               "proposed_secure": "C · Quality-hiding secure agg.",
+               "proposed_tiered": "D · C + airtime tiers"}
+PATENT_COLORS = {"std_fedavg": "#eb6834", "fedavg_transport": "#eda100",
+                 "proposed_secure": "#1baf7a", "proposed_tiered": "#2a78d6"}
+
+
+def load_patent_effects() -> Optional[Dict[str, Any]]:
+    return read_json(_path("results", "patent", "effects.json"))
+
+
+def patent_table(effects: Dict[str, Any], metric: str, scale: float = 1.0) -> pd.DataFrame:
+    """One row per arm: mean, CI half-width and per-seed values of ``metric``."""
+    arms = effects["vs_std_fedavg"]["arms"]
+    rows = []
+    for arm, label in PATENT_ARMS.items():
+        s = arms.get(arm, {}).get(metric) or {}
+        if s.get("mean") is None:
+            continue
+        rows.append({"arm": arm, "Arm": label, "mean": scale * s["mean"],
+                     "ci95": scale * (s.get("ci95") or 0.0),
+                     "values": [scale * v for v in s.get("values", [])]})
+    return pd.DataFrame(rows)
+
+
+def patent_paired(effects: Dict[str, Any], arm: str, metric: str,
+                  reference: str = "vs_fedavg_transport") -> Optional[Dict[str, Any]]:
+    return (effects.get(reference, {}).get("paired_vs_reference", {}).get(arm, {}) or {}).get(metric)
+
+
+def patent_drawings() -> List[str]:
+    d = _path("docs", "patent", "drawings")
+    if not os.path.isdir(d):
+        return []
+    return [os.path.join(d, f) for f in sorted(os.listdir(d)) if f.endswith(".png")]
+
+
+def load_options() -> Optional[Dict[str, Any]]:
+    return read_json(_path("results", "options", "options.json"))
+
+
+def options_paired(options: Dict[str, Any], metric: str, scale: float = 1.0) -> pd.DataFrame:
+    """Per option: mean and CI of (option − base) for ``metric``."""
+    paired = options["result"]["paired_vs_reference"]
+    rows = []
+    for arm, metrics in paired.items():
+        s = metrics.get(metric) or {}
+        if s.get("mean") is None:
+            continue
+        rows.append({"option": arm.replace("_", " "), "mean": scale * s["mean"],
+                     "ci95": scale * (s.get("ci95") or 0.0), "n": s.get("n", 0)})
+    return pd.DataFrame(rows)

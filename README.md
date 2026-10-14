@@ -422,6 +422,19 @@ All defaults are PRD section 10.
 | `comm` | `tier_levels` | 5 | prefix lengths on the shared support |
 | `comm` | `nack_retention` | true | a failed upload stays in the vehicle's residual |
 | `comm` | `corrupt_prob` | 0.0 | fault injection: corrupted uploads |
+
+**Optional mechanisms** (all off by default; measured one at a time in
+[`results/options/options.md`](results/options/options.md), dashboard page *Optional mechanisms*):
+
+| Section | Field | Effect when on |
+|---|---|---|
+| `data` | `num_classes: 9`, `rare_hazard_share` | adds rare hazards (construction cone, emergency vehicle, road debris) concentrated on a few scout vehicles; `rare_class_accuracy` is logged |
+| `model` | `focal_gamma` | focal cross-entropy, `(1 − p_t)^γ · CE` |
+| `aggregation` | `quality_score: kst` | `q_k` = kinematic novelty × sensor fidelity (SNR, occlusion, calibration) × KL rare-scene bonus, all measured on the vehicle |
+| `selection` | `mode: kst_ucb`, `quality_floor`, `ucb_beta`, `rarity_reserve` | sensor-health floor, UCB staleness bonus, rotating reserve for rare-hazard scouts |
+| `train` | `scaffold` | SCAFFOLD control variates against client drift; their uplink bytes are counted |
+| `comm` | `ef_normalize_steps`, `ef_quantization` | top-k error feedback in `ΔW/τ` units; the residual also absorbs fp16 rounding |
+| `aggregation` | `alpha_cap_ratio`, `norm_downweight`, `nesterov` | capped-simplex weights, median-relative norm down-weighting, Nesterov server momentum (plaintext path only: secure aggregation never sees individual updates) |
 | `data` | `dirichlet_alpha` | 0.4 | label skew |
 | `data` | `quantity_skew` | 0.45 | log-normal `σ` on `n_k` |
 

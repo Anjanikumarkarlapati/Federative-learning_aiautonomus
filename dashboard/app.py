@@ -8,6 +8,8 @@ Overview        headline numbers + PRD 12.3 acceptance
 Fleet           every vehicle: profile, participation, per-car accuracy
 Benchmark       the four arms of PRD 12.2, round by round
 Ablation        which enhancement does the work
+Patent evidence multi-seed technical effect, drawings (docs/patent/)
+Optional mech.  each checklist option against the proposed method
 Launch a run    configure, start and watch a federated run live
 Run explorer    any run under runs/ or results/
 Validation      the 14 mathematical-validation figures
@@ -707,11 +709,105 @@ def across_methods(table: pd.DataFrame) -> None:
         st.caption("Local-only trains 12 of the vehicles alone; the others have no local-only model.")
 
 
+
+# ------------------------------------------------------------- patent evidence
+
+def _arm_bars(df: pd.DataFrame, title: str, y_title: str) -> go.Figure:
+    fig = go.Figure(go.Bar(
+        x=df["Arm"], y=df["mean"], marker_color=[data.PATENT_COLORS[a] for a in df["arm"]],
+        error_y=dict(type="data", array=df["ci95"], color="#888"),
+        text=[f"{v:.3g}" for v in df["mean"]], textposition="outside",
+        hovertemplate="%{x}: %{y:.4g}<extra></extra>"))
+    fig.update_layout(title=title, showlegend=False)
+    return _style(fig, y_title, x_title="", height=320)
+
+
+def page_patent() -> None:
+    st.title("Patent evidence (India filing)")
+    st.caption("Multi-seed comparison behind the Form 2 working example. Bars: mean over seeds; "
+               "whiskers: 95% CI. Arm B uses the same compression transport as the invention, so "
+               "D − B is what the claimed mechanisms add. See docs/patent/.")
+    effects = data.load_patent_effects()
+    if effects is None:
+        st.info("No results yet. Run `python scripts/run_patent_evidence.py`.")
+        return
+    c = st.columns(4)
+    for col, (metric, label, unit, digits) in zip(c, [
+            ("uplink_airtime_s_per_round", "Uplink airtime / round", "s", 1),
+            ("max_round_airtime_s", "Longest round airtime", "s", 1),
+            ("uplink_energy_j_per_round", "Radio energy / round", "J", 1),
+            ("mb_per_round", "Traffic / round", "MB", 2)]):
+        d = data.patent_table(effects, metric).set_index("arm")
+        p = data.patent_paired(effects, "proposed_tiered", metric) or {}
+        if "proposed_tiered" in d.index:
+            col.metric(f"{label} (D)", f"{d.loc['proposed_tiered', 'mean']:.{digits}f} {unit}",
+                       f"{p.get('mean', 0):+.{digits}f} ± {p.get('ci95') or 0:.{digits}f} vs B",
+                       delta_color="inverse")
+    st.warning("Accuracy does not differ significantly between arms at three seeds; the "
+               "invention is claimed for airtime and energy, not accuracy.")
+    left, right = st.columns(2)
+    for i, (metric, title, unit, scale) in enumerate([
+            ("uplink_airtime_s_per_round", "Uplink airtime per round", "s", 1),
+            ("uplink_energy_j_per_round", "Uplink radio energy per round", "J", 1),
+            ("mb_per_round", "Traffic per round", "MB", 1),
+            ("best_accuracy", "Best test accuracy", "%", 100)]):
+        with (left if i % 2 == 0 else right):
+            show(_arm_bars(data.patent_table(effects, metric, scale), title, unit))
+    with st.expander("Full tables (results/patent/effects.md)"):
+        path = os.path.join(data.REPO_ROOT, "results", "patent", "effects.md")
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as fh:
+                st.markdown(fh.read())
+    st.subheader("Patent drawings (FIG. 1–9)")
+    figs = data.patent_drawings()
+    cols = st.columns(3)
+    for i, f in enumerate(figs):
+        with cols[i % 3]:
+            st.image(f, caption=os.path.basename(f).replace(".png", "").replace("FIG0", "FIG. "),
+                     width="stretch")
+
+
+def page_options() -> None:
+    st.title("Optional mechanisms")
+    st.caption("Each option switched on alone over the proposed configuration (30 vehicles, "
+               "9 classes with rare hazards, 20 rounds). Bars: mean of option − base per seed; "
+               "whiskers: 95% CI. A whisker crossing zero means no measurable effect.")
+    options = data.load_options()
+    if options is None:
+        st.info("No results yet. Run `python scripts/run_option_ablation.py`.")
+        return
+    metric_labels = {"best_accuracy": ("Best accuracy", 100), "best_rare_class_accuracy":
+                     ("Best rare-hazard accuracy", 100), "worst_10pct_vehicle_accuracy":
+                     ("Worst-10%-of-vehicles accuracy", 100), "worst_vehicle_accuracy":
+                     ("Worst-vehicle accuracy", 100), "mb_per_round": ("Traffic per round (MB)", 1)}
+    metric = st.selectbox("Metric", list(metric_labels), format_func=lambda m: metric_labels[m][0])
+    label, scale = metric_labels[metric]
+    df = data.options_paired(options, metric, scale)
+    if df.empty:
+        st.info("No paired results for this metric.")
+        return
+    fig = go.Figure(go.Bar(
+        x=df["mean"], y=df["option"], orientation="h", marker_color="#2a78d6",
+        error_x=dict(type="data", array=df["ci95"], color="#888"),
+        hovertemplate="%{y}: %{x:+.3g}<extra></extra>"))
+    fig.add_vline(x=0, line_color="#888")
+    fig.update_layout(title=f"{label}: option − base", showlegend=False,
+                      yaxis=dict(autorange="reversed"))
+    show(_style(fig, "", x_title="difference", height=80 + 42 * len(df)))
+    path = os.path.join(data.REPO_ROOT, "results", "options", "options.md")
+    if os.path.exists(path):
+        with st.expander("Full tables (results/options/options.md)"):
+            with open(path, encoding="utf-8") as fh:
+                st.markdown(fh.read())
+
+
 PAGES = {
     "Overview": page_overview,
     "Fleet (every vehicle)": page_fleet,
     "Benchmark": page_benchmark,
     "Ablation": page_ablation,
+    "Patent evidence": page_patent,
+    "Optional mechanisms": page_options,
     "Launch a run": page_launch,
     "Run explorer": page_explorer,
     "Validation": page_validation,

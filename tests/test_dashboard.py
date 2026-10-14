@@ -149,8 +149,8 @@ def test_arm_result_does_not_depend_on_earlier_arms(tmp_path):
 
 # ------------------------------------------------------------------ the app itself
 
-APP_PAGES = ["Overview", "Fleet (every vehicle)", "Benchmark", "Ablation",
-             "Launch a run", "Run explorer", "Validation"]
+APP_PAGES = ["Overview", "Fleet (every vehicle)", "Benchmark", "Ablation", "Patent evidence",
+             "Optional mechanisms", "Launch a run", "Run explorer", "Validation"]
 
 
 @pytest.mark.parametrize("page", APP_PAGES)
@@ -165,3 +165,14 @@ def test_every_dashboard_page_renders(page):
     at.sidebar.radio[0].set_value(page).run()
     assert not at.exception, [e.message for e in at.exception]
     assert not at.error, [e.value for e in at.error]
+
+
+def test_patent_evidence_loaders():
+    effects = data.load_patent_effects()
+    assert effects is not None
+    table = data.patent_table(effects, "uplink_airtime_s_per_round")
+    assert list(table["arm"]) == list(data.PATENT_ARMS)
+    # the airtime-tiered arm uses the least uplink airtime
+    assert table.set_index("arm")["mean"].idxmin() == "proposed_tiered"
+    assert data.patent_paired(effects, "proposed_tiered", "uplink_airtime_s_per_round")["mean"] < 0
+    assert len(data.patent_drawings()) >= 8
